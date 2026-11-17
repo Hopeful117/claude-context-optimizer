@@ -69,6 +69,9 @@ export type HistoryEntry = {
   compactTrigger: string | null;
   // True when guidance was injected for this compaction (ES-011).
   wasGuided?: boolean;
+  // ES-014: evaluation signals.
+  turnsBeforeCompaction?: number;
+  contextPercentAtCompaction?: number | null;
 };
 
 /** The bounded in-session history. Stored in the atom, not in $.store. */

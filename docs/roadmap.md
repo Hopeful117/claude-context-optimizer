@@ -28,13 +28,15 @@ Confirmed: Mod loads on Claude Desktop Code tab; all core metrics available; Pan
 
 - **ADR-004**: User-Controlled Compaction Intelligence — trigger policy, two-toggle consent model (manual + auto), fail-open invariant. Status: **Accepted** (2026-11-17). ✅
 - **ES-010**: Guided Compaction Prototype — passive instruction injection on user-initiated `/compact`. Toggle in pane. H1 validated 2026-11-17. v0.9.0. ✅
-- **ES-011**: Auto Trigger Extension — `autoGuideEnabled` toggle, `wasGuided` history marker. v1.0.0. Code merged ✅. Comparative evaluation (Group A vs B, ≥3 events) **not yet run** — pending.
+- **ES-011**: Auto Trigger Extension — `autoGuideEnabled` toggle, `wasGuided` history marker. v1.0.0. Code merged ✅. Manual evaluation protocol superseded by ADR-005.
 - **ES-012**: Persistent Guidance Toggle State — `rememberPrefs` toggle, `prefsAtom`. v1.0.1. ✅
-- **ES-013**: Guided Compaction Stabilization — ANO-001–ANO-006 fixes, `wasGuided` accuracy, compile errors, test coverage. v1.0.2. ← _current_
+- **ES-013**: Guided Compaction Stabilization — ANO-001–ANO-006 fixes, `wasGuided` accuracy, compile errors, test coverage. v1.0.2. ✅
+- **ADR-005**: Evaluation Data Policy — automated behavioral proxies (`evalAtom`, `turnsToResumption`, optional annotation) replace manual M1–M4 protocol. Status: **Accepted** (2026-11-17). ✅
+- **ES-014**: Evaluation Data Collection — `evalAtom`, `turnsToResumption` lazy collection, in-pane annotation widget, compact history fields. v1.0.3. ← _current_
 
-**Phase 3 exit gate:** ADR-004 accepted ✅, H1 validated ✅, code stabilized (ES-013) — comparative evaluation (Group A vs B) still pending before Go/No-Go.
+**Phase 3 exit gate:** ADR-004 accepted ✅, H1 validated ✅, code stabilized (ES-013) ✅ — Go/No-Go verdict blocked on automated evaluation data accumulation (ES-014).
 
-> **Important:** ES-011 comparative evaluation has not been run. The evaluation requires ≥3 real compaction events in a live session. It cannot be inferred from code review or test results.
+> **Important:** ES-011 Go/No-Go verdict requires ≥5 guided and ≥5 unguided compaction events recorded automatically in `evalAtom` after ES-014 is merged. Verdict criteria are defined in ADR-005.
 
 ## Future — Context Orchestrator
 

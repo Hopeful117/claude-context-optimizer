@@ -4,6 +4,24 @@
 export type EventKind = 'session_start' | 'turn' | 'measure' | 'compact';
 export type ContextSource = 'session.usage' | 'session.measure';
 
+// ES-014: evaluation data types.
+export type UserAnnotation = 'positive' | 'negative' | 'skipped';
+
+export type EvalEntry = {
+  compactionId: string;
+  wasGuided: boolean;
+  trigger: string;
+  timestampMs: number;
+  turnsAtCompaction: number;
+  turnsToResumption: number | null;
+  userAnnotation: UserAnnotation;
+};
+
+export type EvalLog = {
+  entries: EvalEntry[];
+  maxEntries: number;
+};
+
 export type NormalizedTurnUsage = {
   inputTokens: number;
   outputTokens: number;
@@ -26,6 +44,9 @@ export type HistoryEntry = {
   agentId: string | undefined;
   compactTrigger: string | null;
   wasGuided?: boolean;
+  // ES-014: evaluation signals (compact-kind only).
+  turnsBeforeCompaction?: number;
+  contextPercentAtCompaction?: number | null;
 };
 
 export type MetricsHistory = {
@@ -65,6 +86,10 @@ export type PaneSnapshot = {
   autoGuideEnabled: boolean;
   /** ES-012: whether the guidance toggle preference is persisted across sessions. Default: false. */
   rememberPrefs: boolean;
+  /** ES-014: compactionId of the most recent compaction awaiting annotation. Null when none pending. */
+  pendingAnnotationId: string | null;
+  /** ES-014: main-session turns elapsed since the last compaction (while annotation is pending). */
+  turnsSinceCompaction: number;
 };
 
 declare module 'claude-code' {
@@ -77,6 +102,8 @@ declare module 'claude-code' {
       metrics: Shaped<null>;
       // ES-012: persistent user guidance preference (rememberPrefs + guideEnabled).
       prefs: Shaped<{ rememberPrefs: boolean; guideEnabled: boolean }>;
+      // ES-014: bounded evaluation log (turnsToResumption + user annotation per compaction).
+      eval: Shaped<EvalLog>;
     };
   }
 }

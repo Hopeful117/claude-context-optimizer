@@ -1,6 +1,6 @@
 import { atom, read, update } from 'claude-code';
 import type { Register } from 'claude-code';
-import type { PaneSnapshot } from '../types';
+import type { PaneSnapshot, EvalLog, EvalEntry } from '../types';
 import type { MetricsHistory } from '../src/metrics/types';
 import { composeInstructions } from '../src/guide/instructions';
 import { makeEntry, MAX_HISTORY } from '../src/metrics/normalize';
@@ -26,7 +26,7 @@ const _legacyMetricsCompat = atom(
 void _legacyMetricsCompat; // silence unused-variable warnings
 
 // Current display state — drives the pane, updated on every event.
-// Shape bumped to 'pane-3' to clear old state when autoGuideEnabled field is added (ES-011).
+// Shape bumped to 'pane-4' to clear old state when pendingAnnotationId / turnsSinceCompaction are added (ES-014).
 const paneAtom = atom(
   { plugin: 'context-optimizer', key: 'pane' } as const,
   {
@@ -43,8 +43,10 @@ const paneAtom = atom(
     guideEnabled: false,
     autoGuideEnabled: false,
     rememberPrefs: false,
+    pendingAnnotationId: null,
+    turnsSinceCompaction: 0,
   } satisfies PaneSnapshot,
-  { shape: 'pane-3' },
+  { shape: 'pane-4' },
 );
 
 // Persistent preferences — never reset on session start or end.
@@ -61,6 +63,15 @@ const historyAtom = atom(
   { plugin: 'context-optimizer', key: 'history' } as const,
   makeHistory('', MAX_HISTORY) satisfies MetricsHistory,
   { shape: 'history-1' },
+);
+
+// Bounded evaluation log — one entry per compaction event (ES-014).
+// turnsToResumption filled lazily on the first main-session turn.complete post-compaction.
+// userAnnotation set by in-pane user action; default is 'skipped'.
+const evalAtom = atom(
+  { plugin: 'context-optimizer', key: 'eval' } as const,
+  { entries: [], maxEntries: 200 } satisfies EvalLog,
+  { shape: 'eval-1' },
 );
 
 // --- Helpers ---
@@ -131,6 +142,8 @@ export const register: Register = (on) => {
         guideEnabled: prefs.rememberPrefs ? prefs.guideEnabled : false,
         autoGuideEnabled: false,
         rememberPrefs: prefs.rememberPrefs,
+        pendingAnnotationId: null,
+        turnsSinceCompaction: 0,
       }));
 
       const freshHistory = makeHistory(sid, MAX_HISTORY);
@@ -259,6 +272,12 @@ export const register: Register = (on) => {
       });
       await update($, historyAtom, h => appendEntry(h, entry));
 
+      // ES-014: count main-session turns since the last compaction (annotation still pending).
+      // turnsToResumption is set when the user annotates or dismisses — not here.
+      if (!isSubagent && prevSnap.pendingAnnotationId != null) {
+        await update($, paneAtom, m => ({ ...m, turnsSinceCompaction: m.turnsSinceCompaction + 1 }));
+      }
+
       $.ui.status(`ctx:${pct(contextSnapshot.percent)}`);
     } catch {
       try { $.ui.status('ctx:err'); } catch { /* ignore observability-only failure */ }
@@ -296,6 +315,8 @@ export const register: Register = (on) => {
         guideEnabled: prefs.rememberPrefs ? prefs.guideEnabled : false,
         autoGuideEnabled: false,
         rememberPrefs: prefs.rememberPrefs,
+        pendingAnnotationId: null,
+        turnsSinceCompaction: 0,
       }));
 
       const freshHistory = makeHistory(newSid, MAX_HISTORY);
@@ -381,8 +402,29 @@ export const register: Register = (on) => {
         costUsd: snap.costUsd,
         compactTrigger: event.trigger,
         wasGuided,
+        turnsBeforeCompaction: snap.turns,
+        contextPercentAtCompaction: snap.context?.percent ?? null,
       });
       await update($, historyAtom, h => appendEntry(recordCompaction(h), entry));
+
+      // ES-014: append eval entry and mark annotation pending.
+      const compactionIndex = snap.compactionCount + 1;
+      const compactionId = `${snap.sessionId ?? ''}:${compactionIndex}`;
+      const evalEntry: EvalEntry = {
+        compactionId,
+        wasGuided,
+        trigger: event.trigger,
+        timestampMs: now,
+        turnsAtCompaction: snap.turns,
+        turnsToResumption: null,
+        userAnnotation: 'skipped',
+      };
+      await update($, evalAtom, log => {
+        const all = [...log.entries, evalEntry];
+        const entries = all.length > log.maxEntries ? all.slice(all.length - log.maxEntries) : all;
+        return { ...log, entries };
+      });
+      await update($, paneAtom, m => ({ ...m, pendingAnnotationId: compactionId, turnsSinceCompaction: 0 }));
 
       $.ui.status(`ctx:${wasGuided ? 'guided-' : ''}compacted(${event.trigger})`);
     } catch {
@@ -576,6 +618,43 @@ export const register: Register = (on) => {
               </Text>
             </Box>
           </Box>
+
+          {/* ES-014: Annotation widget — shown when a compaction just occurred */}
+          {snap.pendingAnnotationId != null && (
+            <Box flexDirection="column">
+              <Text bold>Last compaction</Text>
+              <Box flexDirection="row">
+                <Text dimColor>  Summary useful?  </Text>
+                <Button onPress={() => {
+                  const id = snap.pendingAnnotationId!;
+                  const turns = snap.turnsSinceCompaction;
+                  void update($, evalAtom, log => ({
+                    ...log,
+                    entries: log.entries.map(e =>
+                      e.compactionId === id ? { ...e, userAnnotation: 'positive' as const, turnsToResumption: turns } : e
+                    ),
+                  })).catch(() => {});
+                  void update($, paneAtom, m => ({ ...m, pendingAnnotationId: null })).catch(() => {});
+                }}>👍</Button>
+                <Text>  </Text>
+                <Button onPress={() => {
+                  const id = snap.pendingAnnotationId!;
+                  const turns = snap.turnsSinceCompaction;
+                  void update($, evalAtom, log => ({
+                    ...log,
+                    entries: log.entries.map(e =>
+                      e.compactionId === id ? { ...e, userAnnotation: 'negative' as const, turnsToResumption: turns } : e
+                    ),
+                  })).catch(() => {});
+                  void update($, paneAtom, m => ({ ...m, pendingAnnotationId: null })).catch(() => {});
+                }}>👎</Button>
+                <Text>  </Text>
+                <Button onPress={() => {
+                  void update($, paneAtom, m => ({ ...m, pendingAnnotationId: null })).catch(() => {});
+                }}>—</Button>
+              </Box>
+            </Box>
+          )}
 
           {perfKeys.length > 0 && (
             <Box flexDirection="column">

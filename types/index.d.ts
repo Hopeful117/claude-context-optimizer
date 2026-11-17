@@ -65,6 +65,9 @@ declare module 'claude-code' {
     'context-optimizer': {
       history: Shaped<MetricsHistory>;
       pane: Shaped<PaneSnapshot>;
+      // Migration shim: allows the engine to safely clear v0.2.0 'metrics' state.
+      // Remove once all sessions have been restarted past v0.3.0.
+      metrics: Shaped<null>;
     };
   }
 }

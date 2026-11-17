@@ -9,6 +9,17 @@ const PANE = 'context-optimizer';
 
 // --- Reactive atoms ---
 
+// Migration shim: v0.2.0 stored state under key 'metrics' (shape 'metrics-1').
+// Declaring the atom here lets the engine safely access and discard old state.
+// The shape 'compat-clear-1' doesn't match 'metrics-1', so old state is dropped.
+// This atom is never read or written by hooks. Remove after all sessions restart.
+const _legacyMetricsCompat = atom(
+  { plugin: 'context-optimizer', key: 'metrics' } as const,
+  null as null,
+  { shape: 'compat-clear-1' },
+);
+void _legacyMetricsCompat; // silence unused-variable warnings
+
 // Current display state — drives the pane, updated on every event.
 const paneAtom = atom(
   { plugin: 'context-optimizer', key: 'pane' } as const,

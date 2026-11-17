@@ -6,6 +6,7 @@ import { makeEntry, MAX_HISTORY } from '../src/metrics/normalize';
 import { makeHistory, appendEntry, recordCompaction } from '../src/metrics/history';
 import { evaluate } from '../src/advisor/engine';
 import { recordTiming, getAllStats } from '../src/perf/timing';
+import { contextTrend } from '../src/pane/trend';
 
 const PANE = 'context-optimizer';
 
@@ -56,6 +57,25 @@ function pct(v: number | null | undefined): string {
 
 function na(v: number | null | undefined): string {
   return v !== null && v !== undefined ? v.toLocaleString() : 'N/A';
+}
+
+/** Short advisor state label for the overview line. */
+function advisorState(recs: readonly { category: string }[]): string {
+  if (recs.length === 0) return 'ℹ no active recommendations';
+  const warnings = recs.filter(r => r.category === 'warning').length;
+  const observations = recs.length - warnings;
+  const parts: string[] = [];
+  if (warnings > 0) parts.push(`⚠ ${warnings} warning${warnings > 1 ? 's' : ''}`);
+  if (observations > 0) parts.push(`ℹ ${observations} observation${observations > 1 ? 's' : ''}`);
+  return parts.join('  ');
+}
+
+/** One-line evidence summary for display under a recommendation explanation. */
+function evidenceLine(ev: { metric: string; observedValue: number; threshold?: number; sampleCount?: number }): string {
+  let s = `${ev.metric}: ${ev.observedValue}%`;
+  if (ev.threshold !== undefined) s += `  · threshold: ${ev.threshold}%`;
+  if (ev.sampleCount !== undefined && ev.sampleCount > 1) s += `  · ${ev.sampleCount} turns`;
+  return s;
 }
 
 // --- Event handlers ---
@@ -315,25 +335,39 @@ export const register: Register = (on) => {
       return (
         <Box flexDirection="column" gap={1} paddingX={1}>
 
+          {/* Level 1 — Session Overview */}
+          <Box flexDirection="column">
+            <Text bold>Session Overview</Text>
+            <Text>  fill:   {pct(ctx?.percent)}  ({na(ctx?.tokens)} / {na(ctx?.window)} tokens)</Text>
+            <Text>  trend:  {contextTrend(history)}</Text>
+            <Text>  state:  {advisorState(advisory.recommendations)}</Text>
+          </Box>
+
+          {/* Level 2 — Advisor Insights */}
           <Box flexDirection="column">
             <Text bold>Advisor</Text>
             {advisory.recommendations.length > 0 ? (
               advisory.recommendations.map(r => {
                 const icon = r.category === 'warning' ? '⚠' : r.category === 'action' ? '→' : 'ℹ';
+                const confTag = r.confidence !== 'high' ? ` [${r.confidence[0]?.toUpperCase()}]` : '';
+                const ev = r.evidence?.[0];
+                const evText = ev !== undefined ? evidenceLine(ev) : null;
                 return (
-                  <Text>  {icon} [{r.confidence[0]?.toUpperCase()}] {r.label}: {r.explanation}</Text>
+                  <Box flexDirection="column">
+                    <Text>  {icon}{confTag} {r.label}</Text>
+                    <Text dimColor>      {r.explanation}</Text>
+                    {evText !== null && (
+                      <Text dimColor>      {evText}</Text>
+                    )}
+                  </Box>
                 );
               })
             ) : (
-              <Text dimColor>  All good — no active recommendations</Text>
+              <Text dimColor>  No active recommendations — thresholds not reached.</Text>
             )}
           </Box>
 
-          <Box flexDirection="column">
-            <Text bold>Context window</Text>
-            <Text>  fill:   {pct(ctx?.percent)}  ({na(ctx?.tokens)} / {na(ctx?.window)} tokens)</Text>
-          </Box>
-
+          {/* Level 3 — Diagnostics */}
           <Box flexDirection="column">
             <Text bold>Cache (last turn)</Text>
             {api ? (

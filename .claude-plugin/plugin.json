@@ -1,6 +1,6 @@
 {
   "name": "context-optimizer",
-  "version": "0.8.0",
-  "description": "Observe context window, cache, and rate limits — Context Advisor V1 stabilized (ES-008)",
+  "version": "0.9.0",
+  "description": "Guided compaction prototype — user-controlled preservation instructions on /compact (ES-010)",
   "types": "./types/index.d.ts"
 }

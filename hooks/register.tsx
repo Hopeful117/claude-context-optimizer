@@ -2,6 +2,7 @@ import { atom, read, update } from 'claude-code';
 import type { Register } from 'claude-code';
 import type { PaneSnapshot } from '../types';
 import type { MetricsHistory } from '../src/metrics/types';
+import { composeInstructions } from '../src/guide/instructions';
 import { makeEntry, MAX_HISTORY } from '../src/metrics/normalize';
 import { makeHistory, appendEntry, recordCompaction } from '../src/metrics/history';
 import { evaluate } from '../src/advisor/engine';
@@ -25,6 +26,7 @@ const _legacyMetricsCompat = atom(
 void _legacyMetricsCompat; // silence unused-variable warnings
 
 // Current display state — drives the pane, updated on every event.
+// Shape bumped to 'pane-2' to clear old state when guideEnabled field is added (ES-010).
 const paneAtom = atom(
   { plugin: 'context-optimizer', key: 'pane' } as const,
   {
@@ -38,8 +40,9 @@ const paneAtom = atom(
     rateLimits: [],
     costUsd: null,
     lastCompactTrigger: null,
+    guideEnabled: false,
   } satisfies PaneSnapshot,
-  { shape: 'pane-1' },
+  { shape: 'pane-2' },
 );
 
 // Bounded history — updated on every event, capped at MAX_HISTORY entries.
@@ -114,6 +117,7 @@ export const register: Register = (on) => {
         rateLimits: [],
         costUsd: null,
         lastCompactTrigger: null,
+        guideEnabled: false,
       }));
 
       const freshHistory = makeHistory(sid, MAX_HISTORY);
@@ -275,6 +279,7 @@ export const register: Register = (on) => {
         rateLimits: [],
         costUsd: null,
         lastCompactTrigger: null,
+        guideEnabled: false,
       }));
 
       const freshHistory = makeHistory(newSid, MAX_HISTORY);
@@ -300,8 +305,26 @@ export const register: Register = (on) => {
   });
 
   on('session.compact', async ($, event, next) => {
-    // Call next first: the engine processes the compaction step (session ID unchanged).
-    const result = await next(event);
+    // --- ES-010: Guidance injection (prototype) ---
+    // Intercept manual and plugin triggers only. Default: disabled (guideEnabled=false).
+    // Fail-open: any error falls back to passing the original event unchanged.
+    let guideEnabled = false;
+    try {
+      const preSnap = await read($, paneAtom);
+      guideEnabled = preSnap.guideEnabled;
+    } catch { /* ignore; guideEnabled stays false */ }
+
+    let eventToPass = event;
+    if (guideEnabled && (event.trigger === 'manual' || event.trigger === 'plugin')) {
+      try {
+        eventToPass = { ...event, instructions: composeInstructions(event.instructions) };
+      } catch { /* fail-open: use original event */ }
+    }
+
+    // Delegate to SDK (with potentially augmented instructions).
+    const result = await next(eventToPass);
+
+    // --- Post-compaction state update (unchanged from v0.8.0) ---
     const t0 = Date.now();
     try {
       const now = await $.clock.now();
@@ -332,7 +355,8 @@ export const register: Register = (on) => {
       });
       await update($, historyAtom, h => appendEntry(recordCompaction(h), entry));
 
-      $.ui.status(`ctx:compacted(${event.trigger})`);
+      const wasGuided = guideEnabled && (event.trigger === 'manual' || event.trigger === 'plugin');
+      $.ui.status(`ctx:${wasGuided ? 'guided-' : ''}compacted(${event.trigger})`);
     } catch {
       $.ui.status('ctx:err');
     } finally {
@@ -346,7 +370,7 @@ export const register: Register = (on) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, event) => {
     const t0 = Date.now();
     // Resolve components first — needed in both success and error paths.
-    const { Box, Text } = $.ui.resolve(event);
+    const { Box, Text, Button } = $.ui.resolve(event);
     try {
       const snap = await read($, paneAtom);
       const history = await read($, historyAtom);
@@ -360,6 +384,11 @@ export const register: Register = (on) => {
       const trend = contextTrend(history);
       const warnings = advisory.recommendations.filter(r => r.category === 'warning').length;
       const observations = advisory.recommendations.length - warnings;
+
+      // ES-010: toggle handler — fires-and-forgets the atom update (onPress is void).
+      const toggleGuide = () => {
+        void update($, paneAtom, m => ({ ...m, guideEnabled: !m.guideEnabled }));
+      };
 
       return (
         <Box flexDirection="column" gap={1} paddingX={1}>
@@ -458,6 +487,24 @@ export const register: Register = (on) => {
               <Text dimColor>  compactions: {snap.compactionCount}{snap.lastCompactTrigger ? ` (last: ${snap.lastCompactTrigger})` : ''}</Text>
             )}
             <Text dimColor>  history: {history.entries.length}/{history.maxEntries} entries</Text>
+          </Box>
+
+          {/* ES-010: Compaction Guidance prototype toggle */}
+          <Box flexDirection="column">
+            <Text bold>Compaction Guidance <Text dimColor>(prototype)</Text></Text>
+            <Box flexDirection="row">
+              <Button
+                onPress={toggleGuide}
+                variant={snap.guideEnabled ? 'primary' : undefined}
+              >
+                {snap.guideEnabled ? '● Active' : '○ Disabled'}
+              </Button>
+              <Text dimColor>
+                {'  '}{snap.guideEnabled
+                  ? 'Augments /compact with preservation hints'
+                  : 'Enable to guide /compact summaries'}
+              </Text>
+            </Box>
           </Box>
 
           {perfKeys.length > 0 && (

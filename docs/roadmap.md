@@ -17,16 +17,19 @@ Confirmed: Mod loads on Claude Desktop Code tab; all core metrics available; Pan
 
 **Exit gate met:** reproducible session history, bounded memory, negligible observer overhead, no automatic session changes, 3-level pane with fill/trend/evidence, deterministic recommendations.
 
-## Phase 2 — Stabilization & Effectiveness
+## Phase 2 — Stabilization & Effectiveness ✅ COMPLETE (ES-008, ES-009)
 
-- **ES-008**: V1 Stabilization — post-compaction display consistency (ANO-001), evidence unit formatting (ANO-002), turn counter semantics (ANO-003), hook resilience (ANO-004). v0.8.0. ← _current_
-- **ES-009** (pending ES-008): Context Advisor effectiveness evaluation.
-  - Baseline vs advisor-assisted comparable tasks.
-  - Measure task completion, quality, elapsed time, token breakdown, cache behavior.
-  - Investigate false-positive recommendations.
-  - Empirical calibration of thresholds (currently initial hypotheses, not validated values).
+- **ES-008**: V1 Stabilization — post-compaction display consistency (ANO-001), evidence unit formatting (ANO-002), turn counter semantics (ANO-003), hook resilience (ANO-004). v0.8.0. ✅
+- **ES-009**: Cache optimization feasibility — CONDITIONAL GO. Confirmed: `session.compact` hook can augment instructions. Direct cache control not available. Best lever: compaction lifecycle intelligence. See `docs/investigations/ES-009-cache-optimization-report.md`. ✅
 
-**Phase 2 exit gate:** V1 behavioral correctness validated (ES-008), effectiveness measured against baseline (ES-009), Go/No-Go decision documented.
+**Phase 2 exit gate met:** V1 behavioral correctness validated (ES-008), feasibility study complete (ES-009), Go/No-Go documented.
+
+## Phase 3 — Compaction Intelligence
+
+- **ADR-004**: User-Controlled Compaction Intelligence — architecture for opt-in guided compaction. Status: Proposed (pending human acceptance). ← _architecture decision_
+- **ES-010**: Guided Compaction Prototype — passive instruction injection on user-initiated `/compact`. Toggle in pane. Hypothesis H1 must be validated first. v0.9.0. ← _current_
+
+**Phase 3 exit gate:** ADR-004 accepted, H1 validated in live session, comparative evaluation (Group A vs B) completed, Go/No-Go documented.
 
 ## Future — Context Orchestrator
 

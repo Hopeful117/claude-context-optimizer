@@ -10,13 +10,13 @@
 
 | Scenario | Method | Result | Proof | Limits |
 |---|---|---|---|---|
-| A — New session | Manual runbook (see §2) | ⬜ Not run | — | Requires live Claude Desktop |
-| B — `/clear` | Manual runbook (see §3) | ⬜ Not run | — | Requires live Claude Desktop |
-| C — Resume | Manual runbook (see §4) | ⬜ Not run | — | Requires live Claude Desktop |
-| D — Compaction | Manual runbook (see §5) | ⬜ Not run | — | Requires live Claude Desktop; compaction must be triggered |
-| E — Sub-agents | Manual runbook (see §6) | ⬜ Not run | — | Requires live Claude Desktop; task must spawn a subagent |
-| Performance | Manual measurement (see §7) | ⬜ Not measured | — | Requires live Claude Desktop; timing appears in Overhead section of pane |
-| Error containment | Code review + structural analysis | ✓ Verified | All hooks have try/catch; `next(event)` outside try block | Only proven structurally; runtime failure injection not possible without SDK mock |
+| A — New session | CLI + hook events (`--include-hook-events`) | ✓ Verified (partial — no live LLM) | Session `cee05a03`; `session.start`, pane open, `turn.complete` confirmed; see §2 | `apiKeySource: none` in headless CLI; LLM response was synthetic (auth error); `turn.complete` still fired |
+| B — `/clear` | Manual runbook (see §3) | ⬜ Requires live Claude Desktop | — | CLI headless cannot authenticate; must be run in Claude Desktop app |
+| C — Resume | Manual runbook (see §4) | ⬜ Requires live Claude Desktop | — | CLI headless cannot authenticate |
+| D — Compaction | Manual runbook (see §5) | ⬜ Requires live Claude Desktop | — | CLI headless cannot authenticate; compaction must be triggered |
+| E — Sub-agents | Manual runbook (see §6) | ⬜ Requires live Claude Desktop | — | CLI headless cannot authenticate; subagent spawn requires real LLM |
+| Performance | Manual measurement (see §7) | ⬜ Requires live Claude Desktop | — | No real turns in headless mode; Overhead section cannot populate |
+| Error containment | Code review + structural analysis + CLI runtime | ✓ Verified | All hooks have try/catch; `next(event)` outside try block; pipeline did not stall on 401 error | Runtime: hook pipeline survived auth error (no crash, `ctx:N/A` set correctly) |
 | Timing module | Automated tests (`timing.test.ts`) | ✓ Covered | 10 unit tests | Tests pure logic only; SDK integration untested |
 | Rules — edge cases | Automated tests (`rules.test.ts`) | ✓ Covered | 50+ unit tests total | Pure functions; hook wiring not tested |
 | History — edge cases | Automated tests (`history.test.ts`) | ✓ Covered | 10 unit tests | Pure functions |
@@ -59,6 +59,41 @@
 - An error message appears in the status line.
 
 **Observations to record**: actual session ID prefix, actual turn/measurement counts, pane open time.
+
+---
+
+### Scenario A — Observed Results (2026-11-17)
+
+**Method**: `claude --plugin-dir <worktree> -p "reply PING" --output-format stream-json --include-hook-events --verbose`
+
+**Session**: `cee05a03-3254-452f-bd3c-bb0447c8d8af`
+
+**Hook event sequence observed**:
+
+1. `hook_started` → `SessionStart:startup` (hook_event: `SessionStart`) ✓
+2. `hook_response` → `SessionStart:startup`, exit_code: 0, outcome: `success` ✓
+3. `ui_panes` → pane `context-optimizer` with title "Context Optimizer" registered ✓
+4. `ui_status` → `ctx:ok` ✓
+5. `ui_invalidate` × 3 (ui.render triggered) ✓
+6. `hook_started` → `UserPromptSubmit` ✓, then `hook_response` exit_code: 0 ✓
+7. `init` event with model `claude-opus-5-5`, plugin `context-optimizer@inline` v0.5.0 ✓
+8. Synthetic assistant response (API 401 — no key in headless mode): `api_error_status: 401`
+9. `ui_status` → `ctx:N/A` (turn.complete fired; `$.session.usage()` returned null percent — expected for auth error) ✓
+
+**Key findings**:
+- `session.start` hook fires before the first user prompt ✓
+- Pane registers and status line updates correctly on `session.start` ✓
+- `turn.complete` fired even for a synthetic API error response ✓
+- Pipeline did not crash or stall on auth error — error containment worked ✓
+- `ctx:N/A` is the correct status when context percent is unavailable ✓
+- Session ID is non-null: `cee05a03` ✓
+
+**Partial / not verified**:
+- Actual pane render content (requires live API, pane only renders in Claude Desktop UI)
+- `turns: 1` counter increment (not directly observable in headless stream-json)
+- Recommendation engine output on fresh session
+
+**Status**: ✓ Partially verified (hook lifecycle confirmed; pane content requires live Claude Desktop)
 
 ---
 
@@ -240,8 +275,11 @@ To measure end-to-end impact, compare turn response time with and without the Mo
 
 ## §9 — Remaining Open Items
 
-1. **All manual scenarios (A–E)** must be executed in a live Claude Desktop session before this story is marked Done.
-2. **Performance numbers** must be filled in §7 by a human operator.
-3. **Session resume `$.session.id()` behavior** post-`next(event)` is unverified.
-4. **Sub-agent panel display** when multiple agents are active simultaneously is unverified.
-5. **Threshold empirical validation** (ES-004 §Remaining Open Items) is deferred.
+1. **Scenario A** — hook lifecycle confirmed via CLI; pane render content and counter verification require live Claude Desktop (interactive session with real API key).
+2. **Scenarios B–E** must be executed in a live Claude Desktop session. The headless CLI (`--plugin-dir`) cannot authenticate against the Anthropic API (`apiKeySource: none`). These scenarios require real multi-turn interactions and cannot be driven from a subagent.
+3. **Performance numbers** must be filled in §7 by a human operator (the Overhead section only appears after real turns in an authenticated session).
+4. **Session resume `$.session.id()` behavior** post-`next(event)` is unverified.
+5. **Sub-agent panel display** when multiple agents are active simultaneously is unverified.
+6. **Threshold empirical validation** (ES-004 §Remaining Open Items) is deferred.
+
+**How to complete B–E**: open Claude Desktop Code tab with the Mod loaded, follow the runbooks in §3–§6, and record observations in a new §10 added to this document.

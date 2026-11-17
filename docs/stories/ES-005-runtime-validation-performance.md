@@ -87,7 +87,7 @@ Fixed: read `paneAtom` **before** the update to capture `sessionId`. Removes one
 | AC-01 | `next(event)` always called after turn.complete, even if usage() throws | Automated (guard test) | ✓ Implemented |
 | AC-02 | `next(event)` always called after session.measure, even on error | Code review | ✓ Implemented |
 | AC-03 | `next(event)` called once in session.compact (before observability work) | Code review | ✓ Implemented |
-| AC-04 | `session.start`: new session gets clean history and correct session ID | Manual (Scenario A) | ⬜ Pending runtime |
+| AC-04 | `session.start`: new session gets clean history and correct session ID | Manual (Scenario A) | Partial — hook lifecycle confirmed via CLI; pane content requires live Claude Desktop |
 | AC-05 | `/clear` → new session ID, atoms reset, pane reopens | Manual (Scenario B) | ⬜ Pending runtime |
 | AC-06 | Resume → atoms reset, fresh history, pane reopens | Manual (Scenario C) | ⬜ Pending runtime |
 | AC-07 | `session.compact` event received; observation history preserved | Manual (Scenario D) | ⬜ Pending runtime |
@@ -119,9 +119,12 @@ Fixed: read `paneAtom` **before** the update to capture `sessionId`. Removes one
 
 **Conditional Go** — with the following caveats:
 
-- Automated tests pass and no regression in existing suite: ✓ (pending run)
-- Error containment is structurally verified: ✓
-- Performance measurement remains an open item, requiring a live session
-- Manual scenarios AC-04 through AC-10 must be run before the Mod is distributed beyond the author's own machine
+- Automated tests: 84/84 pass ✓ (no regression in existing suite)
+- Error containment: structurally verified (code review) + runtime-verified (hook pipeline survived 401 auth error in CLI run) ✓
+- AC-04: hook lifecycle confirmed via CLI (`session.start`, pane open, `ctx:ok`, `turn.complete`, `ctx:N/A` on null context) ✓ partial
+- Performance measurement remains an open item — requires live authenticated Claude Desktop session
+- Manual scenarios AC-05 through AC-10 (B–E + perf) must be run before the Mod is distributed beyond the author's own machine
+
+**Constraint**: the headless CLI (`claude --plugin-dir`) cannot authenticate against the Anthropic API (`apiKeySource: none`). Scenarios B–E require an interactive Claude Desktop session with the user logged in.
 
 The Mod is **safe to run** in its current environment. It is **not ready for public distribution** until the runtime validation matrix is complete.

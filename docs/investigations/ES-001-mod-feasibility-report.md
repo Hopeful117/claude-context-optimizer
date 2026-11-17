@@ -1,7 +1,7 @@
 # ES-001 — Claude Code Mods feasibility report
 
 - Date: 2026-11-17
-- Status: **Live runtime validation complete — cache breakdown confirmed via event.usage**
+- Status: **Live runtime validation complete — all manual test protocols passed**
 - Engine build: 2.1.325 (from installed type declarations path)
 - Source of truth: `/tmp/claude-1000/bundled-skills/2.1.325/.../plugin-authoring/types/claude-code.d.ts`
 
@@ -66,7 +66,7 @@
 
 | Metric | API field | Status | Notes |
 |---|---|---|---|
-| Session cost (USD) | `cost.usd` | **AVAILABLE (conditional)** | Present only where the host keeps a cost ledger; CLI always has one; Desktop: unverified — field typed as optional |
+| Session cost (USD) | `cost.usd` | **AVAILABLE — CONFIRMED LIVE (Desktop)** | Present in both CLI and Desktop Code tab via `$.session.usage()` and `session.measure`; field updates as the session accumulates cost |
 | Per-request cost breakdown | — | **UNAVAILABLE** | Only session total via `cost.usd` |
 
 ### 3.4 Session identity & metadata
@@ -89,7 +89,7 @@
 | `turn.complete` | **AVAILABLE** | End of each user turn |
 | `turn.start` | **AVAILABLE** (typed, not hooked in spike) | Start of each user turn |
 | `turn.step` | **AVAILABLE** (typed, not hooked) | Intermediate steps within a turn |
-| `session.compact` | **AVAILABLE** | Manual `/compact`, auto threshold, plugin-triggered, or `precompute` |
+| `session.compact` | **AVAILABLE — CONFIRMED LIVE** | Manual `/compact`, auto threshold, plugin-triggered, or `precompute`; `event.trigger` = `"manual"` on `/compact`; hook fires after compaction |
 | `session.end` | **AVAILABLE** (typed, not hooked) | Session closes |
 
 **Key observation on `session.measure` frequency:** The event fires on threshold changes, not on every token. The `changed` field lists which units moved. This means the event is not guaranteed to fire after every turn — only when usage crosses a measurement threshold.
@@ -117,11 +117,9 @@ The following was directly observed with the spike mod loaded in this session:
 - **`event.usage` on `turn.complete`**: confirmed AVAILABLE — `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` all display real non-null values in the pane.
 - **`breakdown.apiUsage`**: confirmed NULL in Desktop Code tab — `$.session.usage({ breakdown: 'summary' }).context.breakdown.apiUsage` returns null; not a usable source for cache metrics in this environment.
 - **Pane**: `$.ui.open()` + `ui.render{Pane}` confirmed functional on Desktop; `atom`/`read`/`update` reactive state works correctly.
-- **`cost`**: presence on Desktop not fully verified (field optional by type; CLI confirmed in types).
+- **`cost.usd`**: confirmed AVAILABLE on Desktop Code tab — `$.session.usage().cost.usd` returns a non-null value; pane shows `$X.XXXX` after turns accumulate cost.
 - **`rateLimits`**: array present; content depends on account type.
-
-Fields that could not be fully verified live without instrumenting a compaction:
-- `session.compact` event payload structure (typed, hook implemented, not triggered in spike).
+- **`session.compact` event**: confirmed AVAILABLE — triggered via manual `/compact`; `event.trigger` = `"manual"`; pane shows `last compact: manual`; status line shows `ctx:compacted(manual)`.
 
 ---
 
@@ -183,11 +181,11 @@ For interactions that require human action to verify:
 
 | Item | Status |
 |---|---|
-| `cost.usd` availability on Desktop | Unverified — optional field, confirmed on CLI |
+| `cost.usd` availability on Desktop | **Confirmed AVAILABLE** — non-null in Desktop Code tab |
 | `session.measure` exact threshold | Undocumented — observed to fire, but threshold increment not measured |
 | `breakdown.apiUsage` via `$.session.usage({ breakdown })` | **Confirmed null** in Desktop Code tab — do not use for cache metrics |
 | Subagent session isolation | `agentId` present in some events; not tested in spike |
-| Compaction event payload | Typed and hooked; trigger not exercised in spike |
+| Compaction event payload | **Confirmed** — `event.trigger = "manual"` on `/compact`; hook fires after compaction |
 | Overhead measurement | No baseline scenario; timing benchmarks deferred |
 | Desktop vs CLI behavioral differences | `cost` and surface rendering differ; `$.ui.status()` confirmed on Desktop |
 
@@ -200,7 +198,7 @@ For interactions that require human action to verify:
 The following metrics are reliably available for V1:
 - Context window size, fill percentage, and total input tokens — suitable for "you're at X% of context" advisory.
 - Rate-limit percentages (account-dependent) — suitable for "approaching rate limit" advisory.
-- Session cost total (CLI confirmed, Desktop pending) — suitable for cost tracking.
+- Session cost total (confirmed on CLI and Desktop) — suitable for cost tracking.
 - Session metadata (ID, model, version, start time) — suitable for session identification and comparison.
 - `session.measure` event for reactive updates — suitable for threshold-triggered advisories.
 - Local `$.store` persistence — suitable for cross-turn baselines and trend detection.
@@ -211,9 +209,7 @@ The following metrics are reliably available for V1:
 
 **Deferred to follow-on spike:**
 - Full cache breakdown verification (`breakdown.apiUsage` live values).
-- Compaction event payload.
 - Overhead benchmarks on a repeatable scenario.
-- Cost field behavior on Desktop (manual test T2 above).
 
 **Not in V1 scope (unavailable or policy):**
 - Subscription quota (token limits per window) — not exposed.

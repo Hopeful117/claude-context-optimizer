@@ -27,6 +27,7 @@ test('evaluate: context fill high → one high recommendation', () => {
   const result = evaluate(h);
   expect(result.recommendations[0]?.id).toBe('context-fill-high');
   expect(result.recommendations[0]?.confidence).toBe('high');
+  expect(result.recommendations[0]?.category).toBe('warning');
 });
 
 test('evaluate: recommendations sorted high before medium', () => {

@@ -188,6 +188,47 @@ export const register: Register = (on) => {
     return next(event);
   });
 
+  on('session.end', async ($, event, next) => {
+    // session.start does not fire after /clear (SDK: "never /clear").
+    // We must reset here to avoid carrying stale state into the new session.
+    // Also handles 'resume' — the mod is reloaded into a fresh context.
+    const result = await next(event);
+    if (event.reason !== 'clear' && event.reason !== 'resume') return result;
+
+    const now = await $.clock.now();
+    const newSid = await $.session.id();
+    const model = await $.session.model();
+
+    await update($, paneAtom, () => ({
+      turns: 0,
+      measurements: 0,
+      compactionCount: 0,
+      sessionId: newSid,
+      model: model ?? null,
+      context: null,
+      apiUsage: null,
+      rateLimits: [],
+      costUsd: null,
+      lastCompactTrigger: null,
+    }));
+
+    const freshHistory = makeHistory(newSid, MAX_HISTORY);
+    const startEntry = makeEntry({
+      kind: 'session_start',
+      timestampMs: now,
+      sessionId: newSid,
+      context: { window: 0, tokens: undefined, percent: undefined },
+      contextSource: 'session.usage',
+      costUsd: null,
+    });
+    await update($, historyAtom, () => appendEntry(freshHistory, startEntry));
+
+    // /clear closes all panes — reopen.
+    void $.ui.open({ id: PANE, title: 'Context Optimizer' });
+    $.ui.status('ctx:ok');
+    return result;
+  });
+
   on('session.compact', async ($, event, next) => {
     const result = await next(event);
     const now = await $.clock.now();
@@ -231,9 +272,12 @@ export const register: Register = (on) => {
         <Box flexDirection="column">
           <Text bold>Advisor</Text>
           {advisory.recommendations.length > 0 ? (
-            advisory.recommendations.map(r => (
-              <Text>  [{r.confidence[0]?.toUpperCase()}] {r.label}: {r.explanation}</Text>
-            ))
+            advisory.recommendations.map(r => {
+              const icon = r.category === 'warning' ? '⚠' : r.category === 'action' ? '→' : 'ℹ';
+              return (
+                <Text>  {icon} [{r.confidence[0]?.toUpperCase()}] {r.label}: {r.explanation}</Text>
+              );
+            })
           ) : (
             <Text dimColor>  All good — no active recommendations</Text>
           )}

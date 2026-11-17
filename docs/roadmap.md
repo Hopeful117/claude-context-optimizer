@@ -31,12 +31,13 @@ Confirmed: Mod loads on Claude Desktop Code tab; all core metrics available; Pan
 - **ES-011**: Auto Trigger Extension — `autoGuideEnabled` toggle, `wasGuided` history marker. v1.0.0. Code merged ✅. Manual evaluation protocol superseded by ADR-005.
 - **ES-012**: Persistent Guidance Toggle State — `rememberPrefs` toggle, `prefsAtom`. v1.0.1. ✅
 - **ES-013**: Guided Compaction Stabilization — ANO-001–ANO-006 fixes, `wasGuided` accuracy, compile errors, test coverage. v1.0.2. ✅
-- **ADR-005**: Evaluation Data Policy — automated behavioral proxies (`evalAtom`, `turnsToResumption`, optional annotation) replace manual M1–M4 protocol. Status: **Accepted** (2026-11-17). ✅
-- **ES-014**: Evaluation Data Collection — `evalAtom`, `turnsToResumption` lazy collection, in-pane annotation widget, compact history fields. v1.0.3. ← _current_
+- **ADR-005**: Evaluation Data Policy — automated behavioral proxies (`evalAtom`, `turnsUntilAnnotation`, optional annotation) replace manual M1–M4 protocol. Status: **Accepted, amended ES-015** (2026-11-17). ✅
+- **ES-014**: Evaluation Data Collection — `evalAtom`, annotation widget, compact history fields. v1.0.3. ✅
+- **ES-015**: Evaluation Signal Reliability — `turnsToResumption` → `turnsUntilAnnotation` (accurate semantics), `'dismissed'` annotation value, ADR-005 amendment. v1.0.4. ← _current_
 
-**Phase 3 exit gate:** ADR-004 accepted ✅, H1 validated ✅, code stabilized (ES-013) ✅ — Go/No-Go verdict blocked on automated evaluation data accumulation (ES-014).
+**Phase 3 exit gate:** ADR-004 accepted ✅, H1 validated ✅, code stabilized (ES-013) ✅ — Go/No-Go verdict blocked on automated evaluation data accumulation (ES-014/ES-015).
 
-> **Important:** ES-011 Go/No-Go verdict requires ≥5 guided and ≥5 unguided compaction events recorded automatically in `evalAtom` after ES-014 is merged. Verdict criteria are defined in ADR-005.
+> **Important:** ES-011 Go/No-Go verdict requires ≥5 annotated events (positive + negative + dismissed) per group recorded in `evalAtom` after ES-015 is merged. Verdict criteria are defined in ADR-005.
 
 ## Future — Context Orchestrator
 

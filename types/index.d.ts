@@ -4,8 +4,9 @@
 export type EventKind = 'session_start' | 'turn' | 'measure' | 'compact';
 export type ContextSource = 'session.usage' | 'session.measure';
 
-// ES-014: evaluation data types.
-export type UserAnnotation = 'positive' | 'negative' | 'skipped';
+// ES-014/ES-015: evaluation data types.
+// UserAnnotation: positive/negative = rated; dismissed = explicit "—"; skipped = never reached.
+export type UserAnnotation = 'positive' | 'negative' | 'skipped' | 'dismissed';
 
 export type EvalEntry = {
   compactionId: string;
@@ -13,7 +14,8 @@ export type EvalEntry = {
   trigger: string;
   timestampMs: number;
   turnsAtCompaction: number;
-  turnsToResumption: number | null;
+  /** Turns elapsed between compaction and annotation click. Null when annotation was not provided. */
+  turnsUntilAnnotation: number | null;
   userAnnotation: UserAnnotation;
 };
 
@@ -88,8 +90,8 @@ export type PaneSnapshot = {
   rememberPrefs: boolean;
   /** ES-014: compactionId of the most recent compaction awaiting annotation. Null when none pending. */
   pendingAnnotationId: string | null;
-  /** ES-014: main-session turns elapsed since the last compaction (while annotation is pending). */
-  turnsSinceCompaction: number;
+  /** ES-015: main-session turns elapsed since the last compaction (while annotation is pending). */
+  turnsUntilAnnotation: number;
 };
 
 declare module 'claude-code' {
@@ -102,7 +104,7 @@ declare module 'claude-code' {
       metrics: Shaped<null>;
       // ES-012: persistent user guidance preference (rememberPrefs + guideEnabled).
       prefs: Shaped<{ rememberPrefs: boolean; guideEnabled: boolean }>;
-      // ES-014: bounded evaluation log (turnsToResumption + user annotation per compaction).
+      // ES-014/ES-015: bounded evaluation log (turnsUntilAnnotation + user annotation per compaction).
       eval: Shaped<EvalLog>;
     };
   }

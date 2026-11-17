@@ -1,33 +1,35 @@
-import type { Register, SessionContextUsage, SessionRateLimit, SessionCost, UsageUnit } from 'claude-code';
+import { atom, read, update } from 'claude-code';
+import type { Register } from 'claude-code';
+import type { MetricsSnapshot } from '../types';
 
 // ES-001 metrics observation spike.
-// Captures every field $.session.usage() and session.measure expose.
-// Displays observed values; marks absent optional fields as UNAVAILABLE.
-// No prompt/code/tool content is stored. No network calls. No model calls.
+// Pane-based display of context, cache, rate-limit, and cost metrics.
+// No prompt/code/tool content collected. No network or model calls.
 
-let turns = 0;
-let measurements = 0;
+const PANE = 'context-optimizer';
 
-let lastContext: SessionContextUsage | null = null;
-let lastRateLimits: SessionRateLimit[] = [];
-let lastCost: SessionCost | undefined;
-let lastChanged: UsageUnit[] = [];
+const metrics = atom(
+  { plugin: 'context-optimizer', key: 'metrics' } as const,
+  {
+    turns: 0,
+    measurements: 0,
+    sessionId: null,
+    model: null,
+    context: null,
+    apiUsage: null,
+    rateLimits: [],
+    cost: null,
+    lastCompactTrigger: null,
+  } satisfies MetricsSnapshot,
+  { shape: 'metrics-1' },
+);
 
-function statusLine(): string {
-  const ctx = lastContext;
-  if (!ctx) return `ctx-optimizer: initializing… (${turns}T/${measurements}M)`;
+function na(v: number | null | undefined): string {
+  return v !== null && v !== undefined ? v.toLocaleString() : 'N/A';
+}
 
-  const pct = ctx.percent !== undefined ? `${ctx.percent}%` : 'pct=N/A';
-  const tokens = ctx.tokens !== undefined ? ctx.tokens.toLocaleString() : 'tok=N/A';
-  const window = ctx.window.toLocaleString();
-
-  const rl = lastRateLimits.length > 0
-    ? lastRateLimits.map(r => `${r.kind}:${r.percentUsed}%`).join(' ')
-    : 'rl=N/A';
-
-  const cost = lastCost !== undefined ? `$${lastCost.usd.toFixed(4)}` : 'cost=N/A';
-
-  return `ctx: ${pct} ${tokens}/${window} | ${rl} | ${cost} | ${turns}T/${measurements}M`;
+function pct(v: number | null | undefined): string {
+  return v !== null && v !== undefined ? `${v}%` : 'N/A';
 }
 
 export const register: Register = (on) => {
@@ -36,36 +38,48 @@ export const register: Register = (on) => {
     const v = await $.session.version();
     const model = await $.session.model();
 
-    $.ui.status(
-      `ctx-optimizer loaded | session=${sid.slice(0, 8)} | v=${v.version} | model=${model ?? 'N/A'}`
-    );
-
-    // Seed store for cross-turn comparison baseline.
-    await $.store.set('ctx.sessionStart', {
-      ts: $.clock.now(),
+    await update($, metrics, m => ({
+      ...m,
       sessionId: sid,
-      version: v.version,
       model: model ?? null,
-    });
+    }));
+
+    void $.ui.open({ id: PANE, title: 'Context Optimizer' });
+    $.ui.status(`ctx:ok`);
 
     return next(event);
   });
 
   on('session.measure', async ($, event, next) => {
-    measurements += 1;
-    lastContext = event.context;
-    lastRateLimits = event.rateLimits;
-    lastCost = event.cost;
-    lastChanged = event.changed;
+    await update($, metrics, m => ({
+      ...m,
+      measurements: m.measurements + 1,
+      context: {
+        tokens: event.context.tokens ?? null,
+        window: event.context.window,
+        percent: event.context.percent ?? null,
+      },
+      rateLimits: event.rateLimits.map(r => ({
+        kind: r.kind,
+        percentUsed: r.percentUsed,
+        resetsAt: r.resetsAt ?? null,
+      })),
+      cost: event.cost?.usd ?? null,
+    }));
 
-    // Cheap usage call (no breakdown = no token-count API requests).
+    const snap = await read($, metrics);
+    $.ui.status(`ctx:${pct(snap.context?.percent)}`);
+    return next(event);
+  });
+
+  on('turn.complete', async ($, event, next) => {
     const usage = await $.session.usage();
+    const usageWithBreakdown = await $.session.usage({ breakdown: 'summary' });
+    const apiUsage = usageWithBreakdown.context.breakdown?.apiUsage ?? null;
 
-    // Persist metadata snapshot — no prompt/code/secret content.
-    await $.store.set('ctx.lastMeasure', {
-      ts: $.clock.now(),
-      turns,
-      measurements,
+    await update($, metrics, m => ({
+      ...m,
+      turns: m.turns + 1,
       context: {
         tokens: usage.context.tokens ?? null,
         window: usage.context.window,
@@ -77,49 +91,88 @@ export const register: Register = (on) => {
         resetsAt: r.resetsAt ?? null,
       })),
       cost: usage.cost?.usd ?? null,
-      changed: event.changed,
-    });
+      apiUsage: apiUsage
+        ? {
+            input_tokens: apiUsage.input_tokens,
+            output_tokens: apiUsage.output_tokens,
+            cache_read_input_tokens: apiUsage.cache_read_input_tokens,
+            cache_creation_input_tokens: apiUsage.cache_creation_input_tokens,
+          }
+        : null,
+    }));
 
-    $.ui.status(statusLine());
-    return next(event);
-  });
-
-  on('turn.complete', async ($, event, next) => {
-    turns += 1;
-
-    // Refresh figures after each turn — may differ from last session.measure.
-    const usage = await $.session.usage();
-    lastContext = usage.context;
-    lastRateLimits = usage.rateLimits;
-    lastCost = usage.cost;
-
-    await $.store.set('ctx.lastTurn', {
-      ts: $.clock.now(),
-      turns,
-      measurements,
-      context: {
-        tokens: usage.context.tokens ?? null,
-        window: usage.context.window,
-        percent: usage.context.percent ?? null,
-      },
-      cost: usage.cost?.usd ?? null,
-    });
-
-    $.ui.status(statusLine());
+    const snap = await read($, metrics);
+    $.ui.status(`ctx:${pct(snap.context?.percent)}`);
     return next(event);
   });
 
   on('session.compact', async ($, event, next) => {
     const result = await next(event);
-
-    // Record compaction metadata only — no message content stored.
-    await $.store.set('ctx.lastCompact', {
-      ts: $.clock.now(),
-      trigger: event.trigger,
-      agentId: event.agentId ?? null,
-    });
-
-    $.ui.status(`ctx-optimizer: compaction (${event.trigger}) observed`);
+    await update($, metrics, m => ({ ...m, lastCompactTrigger: event.trigger }));
+    $.ui.status(`ctx:compacted(${event.trigger})`);
     return result;
+  });
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, event) => {
+    const { Box, Text } = $.ui.resolve(event);
+    const snap = await read($, metrics);
+    const ctx = snap.context;
+    const api = snap.apiUsage;
+
+    return (
+      <Box flexDirection="column" gap={1} paddingX={1}>
+
+        {/* Context window */}
+        <Box flexDirection="column">
+          <Text bold>Context window</Text>
+          <Text>  fill:   {pct(ctx?.percent)}  ({na(ctx?.tokens)} / {na(ctx?.window)} tokens)</Text>
+        </Box>
+
+        {/* Cache breakdown */}
+        <Box flexDirection="column">
+          <Text bold>Cache (last turn)</Text>
+          {api ? (
+            <>
+              <Text>  cache read:  {na(api.cache_read_input_tokens)}</Text>
+              <Text>  cache write: {na(api.cache_creation_input_tokens)}</Text>
+              <Text>  uncached in: {na(api.input_tokens)}</Text>
+              <Text>  output:      {na(api.output_tokens)}</Text>
+            </>
+          ) : (
+            <Text dimColor>  N/A — awaiting first turn with breakdown</Text>
+          )}
+        </Box>
+
+        {/* Rate limits */}
+        <Box flexDirection="column">
+          <Text bold>Rate limits</Text>
+          {snap.rateLimits.length > 0 ? (
+            snap.rateLimits.map(r => (
+              <Text>  {r.kind}: {r.percentUsed}%{r.resetsAt ? ` (resets ${r.resetsAt.slice(0, 10)})` : ''}</Text>
+            ))
+          ) : (
+            <Text dimColor>  N/A — no rate limit data</Text>
+          )}
+        </Box>
+
+        {/* Cost */}
+        <Box flexDirection="column">
+          <Text bold>Cost</Text>
+          <Text>  {snap.cost !== null ? `$${snap.cost.toFixed(4)}` : 'N/A'}</Text>
+        </Box>
+
+        {/* Session info */}
+        <Box flexDirection="column">
+          <Text bold>Session</Text>
+          <Text>  id:    {snap.sessionId?.slice(0, 12) ?? 'N/A'}</Text>
+          <Text>  model: {snap.model ?? 'N/A'}</Text>
+          <Text>  turns: {snap.turns}  measures: {snap.measurements}</Text>
+          {snap.lastCompactTrigger && (
+            <Text dimColor>  last compact: {snap.lastCompactTrigger}</Text>
+          )}
+        </Box>
+
+      </Box>
+    );
   });
 };

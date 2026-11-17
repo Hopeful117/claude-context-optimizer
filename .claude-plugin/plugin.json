@@ -1,5 +1,6 @@
 {
   "name": "context-optimizer",
-  "version": "0.1.0",
-  "description": "Observe turns and measurements — read-only context intelligence prototype"
+  "version": "0.2.0",
+  "description": "Observe context window, cache, and rate limits — read-only Context Advisor prototype",
+  "types": "./types/index.d.ts"
 }

@@ -4,6 +4,7 @@ import type { PaneSnapshot } from '../types';
 import type { MetricsHistory } from '../src/metrics/types';
 import { makeEntry, MAX_HISTORY } from '../src/metrics/normalize';
 import { makeHistory, appendEntry, recordCompaction } from '../src/metrics/history';
+import { evaluate } from '../src/advisor/engine';
 
 const PANE = 'context-optimizer';
 
@@ -222,9 +223,19 @@ export const register: Register = (on) => {
     const history = await read($, historyAtom);
     const ctx = snap.context;
     const api = snap.apiUsage;
+    const advisory = evaluate(history, snap.rateLimits);
 
     return (
       <Box flexDirection="column" gap={1} paddingX={1}>
+
+        {advisory.recommendations.length > 0 && (
+          <Box flexDirection="column">
+            <Text bold>Advisor</Text>
+            {advisory.recommendations.map(r => (
+              <Text>  [{r.confidence[0]?.toUpperCase()}] {r.label}: {r.explanation}</Text>
+            ))}
+          </Box>
+        )}
 
         <Box flexDirection="column">
           <Text bold>Context window</Text>

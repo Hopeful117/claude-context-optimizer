@@ -1,28 +1,34 @@
-# ADR-001 — Integration boundary and stack selection
+# ADR-001 — Claude Code Mod integration boundary and stack selection
 
 - Status: **Accepted**
 - Date: 2026-11-17
+- Updated: 2026-11-17 — explicit Mod-only product decision
 
 ## Context
 
-The product is intended to integrate with Claude Desktop's Code experience and Claude Code, not become a standalone Java/Python service by default. Different extension surfaces (Claude Code plugins/hooks, MCP, and potential SDK/UI integrations) have different permissions and data access. Exact capabilities and version constraints must be verified in a spike.
+Claude Context Optimizer targets Claude Code, including its integration in Claude Desktop's Code experience where supported. The product is an extension, not a standalone backend. The user has explicitly chosen **Claude Code Mods**, rather than MCP Apps, as the product's integration mechanism.
+
+The existence, availability, permissions, event schema, and UI/telemetry capabilities of the relevant Mods interfaces must still be validated against the currently supported documentation and an actual installation. Choosing the integration mechanism does not establish that any particular API exists.
 
 ## Decision
 
-1. Prefer **documented, supported Claude Code/Desktop extension surfaces** and keep the implementation as small as possible.
-2. Treat a native Claude Code extension/Mod as the **leading hypothesis**, not a proven compatibility guarantee.
-3. Use **TypeScript** as the provisional spike language if the selected official API supports it naturally. Do not select Java/Spring, Python, Rust, or Go by habit.
-4. Defer final runtime, packaging, UI, storage engine, and telemetry transport choices until the spike verifies interfaces and deployment constraints.
-5. Avoid reverse-engineered request interception, undocumented private APIs, or a mandatory remote service.
+1. **Claude Code Mods are the selected integration boundary.** Do not implement the product as an MCP App or substitute an MCP server for the Mod.
+2. **TypeScript is the preferred implementation language**, conditional on the actual supported Mod runtime and tooling. Validate the SDK/API and minimum versions before scaffolding.
+3. The first deliverable is a small Mod feasibility spike: installation, session observation, available usage/cache metrics, supported UI, and bounded local persistence.
+4. V1 remains **read-only Context Advisor**. No automatic compaction, session resets, prompt rewriting, or interception of internal requests.
+5. No Java/Spring, Python service, remote backend, or additional LLM calls by default.
+6. Use only documented and supported integration surfaces; do not access private credentials or reverse-engineer internal network traffic.
+7. If the Mod API cannot expose a required metric or UI surface, document that limitation and adjust V1 scope **within the Mod approach**; do not silently switch to MCP Apps.
 
 ## Consequences
 
-- The initial repository contains architecture documents, not an application scaffold.
-- The spike must document tested versions, observed payloads, supported environments, security implications, and fallback options.
-- If Desktop integration is unsupported or too limited, reconsider the distribution boundary before committing to a stack.
+- ES-001 validates the Mod SDK, version compatibility, actual event payloads, provenance of counters, UI and storage constraints, and observer overhead.
+- Product decisions are firm; implementation details remain provisional until the spike.
+- The Mod may report metrics as unavailable when the platform does not expose them.
+- No claim of direct subscription quota accounting without documented evidence.
 
 ## Alternatives considered
 
-- MCP-only extension: potentially useful for exposing tools, but does not imply passive access to internal usage metrics.
-- Separate local daemon: possible later, but adds lifecycle, installation, and security costs.
-- Java/Spring or Python backend: unjustified without a concrete integration or processing need.
+- **MCP Apps:** explicitly excluded as the product integration mechanism; DevLog's MCP App can inform general UX or observability lessons, but is not the architecture for this project.
+- Separate local daemon: not justified for V1.
+- Java/Spring or Python backend: not justified without a concrete requirement.

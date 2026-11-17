@@ -1,6 +1,6 @@
 # ES-010 — Guided Compaction Prototype
 
-- Status: **Implemented**
+- Status: **Validated**
 - Date: 2026-11-17
 - Branch: `feat/es-010-guided-compaction-prototype`
 - Base: `main` (v0.8.0 — ES-008 and ES-009 merged)
@@ -105,9 +105,25 @@ Assess per ADR-004 §Evaluation Protocol: turns to effective resumption, correct
 
 ---
 
+## H1 Validation Results
+
+**Date:** 2026-11-17 — live session test with guidance toggle `● Active`.
+
+| Criterion | Result |
+|---|---|
+| 7-category structure present in summary | ✅ 7/7 categories represented |
+| Summary structurally different from unguided | ✅ 9 titled sections vs flat narrative; dedicated files section with exact paths |
+| Status line `ctx:guided-compacted(manual)` | ✅ Confirmed in pane |
+
+**Conclusion: H1 confirmed.** The `event.instructions` modification reaches the summarizer and produces a structurally distinct output aligned with the PRESERVATION_TEMPLATE. The prototype is viable.
+
+**Go/No-Go decision:** CONDITIONAL GO — H1 confirmed. Quality improvement is structurally evident but comparative evaluation (Group A vs Group B, ≥3 events each) has not yet been run. Refine template if needed after comparative run.
+
+---
+
 ## Remaining Limitations
 
-- **H1 unconfirmed**: Whether `event.instructions` modification reaches the summarizer is not yet validated in a live session. This is the first thing to test.
+- **Comparative evaluation pending**: H1 is confirmed but Group A vs Group B quality comparison (≥3 events each) has not yet been completed. Required before GO on extending to `auto` trigger.
 - **No `auto` coverage**: The most frequent compaction trigger in long sessions is not covered by this prototype. This is intentional (ADR-004 §Proposed Decision).
 - **`onPress` async**: The toggle fires-and-forgets the atom update. If `update($, paneAtom, ...)` fails silently, the Button state may not reflect reality until the next render cycle. Not a safety issue.
 - **No persistent config**: Guidance resets on session start/end. This is intentional (session-scoped consent).
@@ -116,7 +132,7 @@ Assess per ADR-004 §Evaluation Protocol: turns to effective resumption, correct
 
 ## Go/No-Go for ES-011
 
-**Recommendation: awaiting validation** — depends on H1 confirmation and comparative evaluation results.
+**Recommendation: CONDITIONAL GO** — H1 confirmed 2026-11-17. Comparative evaluation pending.
 
 - **GO (extend to `auto` trigger):** H1 confirmed; ≥2 of 3 Group B compaction events show better resumption than Group A.
 - **NO-GO (remove prototype):** H1 fails; or no measurable difference after 5 events; or summarizer produces longer summaries without better content.

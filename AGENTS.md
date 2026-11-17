@@ -8,7 +8,7 @@ This file provides authoritative project context for AI coding assistants (Claud
 
 A **Claude Code plugin** (mod) that renders a live context-window dashboard inside the Claude Desktop app. It observes session events (`session.start`, `turn.complete`, `session.measure`, `session.compact`) and displays context fill, token breakdown, cache diagnostics, advisor recommendations, and compaction guidance controls in a persistent side pane.
 
-**Current version:** v0.9.1 (ES-012 — Persistent Guidance Toggle State)
+**Current version:** v1.0.2 (ES-013 — Guided Compaction Stabilization)
 
 ---
 
@@ -84,17 +84,19 @@ DevLog configuration is in `TOOLS.md` (this repository's DevLog project slug: `c
 
 ## Current Work
 
-- **ES-010** merged on `main` (v0.9.0) — Guided Compaction Prototype with pane toggle.
-- **ES-011** pending — Comparative evaluation (Group A vs B, requires ≥3 compaction events).
-- **ES-012** implemented (v0.9.1) — Persistent Guidance Toggle State (`rememberPrefs`, `prefsAtom`).
+- **ES-010** merged on `main` (v0.9.0) — Guided Compaction Prototype with pane toggle. ✅
+- **ES-011** code merged (v1.0.0) — Auto trigger extension implemented. Comparative evaluation (Group A vs B, ≥3 compaction events) **not yet run** — pending.
+- **ES-012** merged (v1.0.1) — Persistent Guidance Toggle State (`rememberPrefs`, `prefsAtom`). ✅
+- **ES-013** in progress (v1.0.2) — Guided Compaction Stabilization (ANO-001–ANO-006 fixes).
 
 ---
 
 ## Testing
 
 ```bash
-npm test          # run Vitest suite
-npm run build     # tsc type-check and compile
+claude plugin test .   # run Vitest suite (Claude Code SDK test runner)
 ```
+
+> **Note:** This repository has no `package.json`. The test runner is `claude plugin test .`, not `npm test`.
 
 All new behavior must have unit tests. Quality gate: zero TypeScript errors, all tests pass.

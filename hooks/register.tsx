@@ -46,6 +46,14 @@ const paneAtom = atom(
   { shape: 'pane-3' },
 );
 
+// Persistent preferences — never reset on session start or end.
+// Stores the user's guidance preference when rememberPrefs is true (ES-012).
+const prefsAtom = atom(
+  { plugin: 'context-optimizer', key: 'prefs' } as const,
+  { rememberPrefs: false, guideEnabled: false },
+  { shape: 'prefs-1' },
+);
+
 // Bounded history — updated on every event, capped at MAX_HISTORY entries.
 // Not rendered directly; available for future analysis hooks.
 const historyAtom = atom(
@@ -107,6 +115,7 @@ export const register: Register = (on) => {
       const model = await $.session.model();
       const now = await $.clock.now();
 
+      const prefs = await read($, prefsAtom);
       await update($, paneAtom, () => ({
         turns: 0,
         measurements: 0,
@@ -118,8 +127,9 @@ export const register: Register = (on) => {
         rateLimits: [],
         costUsd: null,
         lastCompactTrigger: null,
-        guideEnabled: false,
+        guideEnabled: prefs.rememberPrefs ? prefs.guideEnabled : false,
         autoGuideEnabled: false,
+        rememberPrefs: prefs.rememberPrefs,
       }));
 
       const freshHistory = makeHistory(sid, MAX_HISTORY);
@@ -270,6 +280,7 @@ export const register: Register = (on) => {
       const newSid = await $.session.id();
       const model = await $.session.model();
 
+      const prefs = await read($, prefsAtom);
       await update($, paneAtom, () => ({
         turns: 0,
         measurements: 0,
@@ -281,8 +292,9 @@ export const register: Register = (on) => {
         rateLimits: [],
         costUsd: null,
         lastCompactTrigger: null,
-        guideEnabled: false,
+        guideEnabled: prefs.rememberPrefs ? prefs.guideEnabled : false,
         autoGuideEnabled: false,
+        rememberPrefs: prefs.rememberPrefs,
       }));
 
       const freshHistory = makeHistory(newSid, MAX_HISTORY);
@@ -397,9 +409,22 @@ export const register: Register = (on) => {
       const warnings = advisory.recommendations.filter(r => r.category === 'warning').length;
       const observations = advisory.recommendations.length - warnings;
 
-      // ES-010/011: toggle handlers — fire-and-forget the atom update (onPress is void).
+      // ES-010/011/012: toggle handlers — fire-and-forget (onPress is void).
       const toggleGuide = () => {
-        void update($, paneAtom, m => ({ ...m, guideEnabled: !m.guideEnabled }));
+        const newVal = !snap.guideEnabled;
+        void update($, paneAtom, m => ({ ...m, guideEnabled: newVal }));
+        if (snap.rememberPrefs) {
+          void update($, prefsAtom, p => ({ ...p, guideEnabled: newVal }));
+        }
+      };
+
+      const toggleRemember = () => {
+        const newVal = !snap.rememberPrefs;
+        void update($, paneAtom, m => ({ ...m, rememberPrefs: newVal }));
+        void update($, prefsAtom, () => ({
+          rememberPrefs: newVal,
+          guideEnabled: snap.guideEnabled,
+        }));
       };
       const toggleAutoGuide = () => {
         void update($, paneAtom, m => ({ ...m, autoGuideEnabled: !m.autoGuideEnabled }));
@@ -504,7 +529,7 @@ export const register: Register = (on) => {
             <Text dimColor>  history: {history.entries.length}/{history.maxEntries} entries</Text>
           </Box>
 
-          {/* ES-011: Compaction Guidance toggles (manual + auto) */}
+          {/* ES-010/011/012: Compaction Guidance toggles (manual + auto) + remember preference */}
           <Box flexDirection="column">
             <Text bold>Compaction Guidance <Text dimColor>(prototype)</Text></Text>
             <Box flexDirection="row">
@@ -531,6 +556,19 @@ export const register: Register = (on) => {
                 {'  '}{snap.autoGuideEnabled
                   ? 'Also guides auto-compactions (ADR-004)'
                   : 'Enable to guide engine-triggered compactions'}
+              </Text>
+            </Box>
+            <Box flexDirection="row">
+              <Button
+                onPress={toggleRemember}
+                variant={snap.rememberPrefs ? 'primary' : undefined}
+              >
+                {snap.rememberPrefs ? '◉ Remember' : '○ Remember'}
+              </Button>
+              <Text dimColor>
+                {'  '}{snap.rememberPrefs
+                  ? 'Preference saved — restored on next session'
+                  : 'Preference resets each session'}
               </Text>
             </Box>
           </Box>

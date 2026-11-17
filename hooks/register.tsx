@@ -26,7 +26,7 @@ const _legacyMetricsCompat = atom(
 void _legacyMetricsCompat; // silence unused-variable warnings
 
 // Current display state — drives the pane, updated on every event.
-// Shape bumped to 'pane-2' to clear old state when guideEnabled field is added (ES-010).
+// Shape bumped to 'pane-3' to clear old state when autoGuideEnabled field is added (ES-011).
 const paneAtom = atom(
   { plugin: 'context-optimizer', key: 'pane' } as const,
   {
@@ -41,8 +41,9 @@ const paneAtom = atom(
     costUsd: null,
     lastCompactTrigger: null,
     guideEnabled: false,
+    autoGuideEnabled: false,
   } satisfies PaneSnapshot,
-  { shape: 'pane-2' },
+  { shape: 'pane-3' },
 );
 
 // Bounded history — updated on every event, capped at MAX_HISTORY entries.
@@ -118,6 +119,7 @@ export const register: Register = (on) => {
         costUsd: null,
         lastCompactTrigger: null,
         guideEnabled: false,
+        autoGuideEnabled: false,
       }));
 
       const freshHistory = makeHistory(sid, MAX_HISTORY);
@@ -280,6 +282,7 @@ export const register: Register = (on) => {
         costUsd: null,
         lastCompactTrigger: null,
         guideEnabled: false,
+        autoGuideEnabled: false,
       }));
 
       const freshHistory = makeHistory(newSid, MAX_HISTORY);
@@ -305,17 +308,25 @@ export const register: Register = (on) => {
   });
 
   on('session.compact', async ($, event, next) => {
-    // --- ES-010: Guidance injection (prototype) ---
-    // Intercept manual and plugin triggers only. Default: disabled (guideEnabled=false).
+    // --- ES-011: Guidance injection (extended from ES-010 prototype) ---
+    // manual/plugin: controlled by guideEnabled.
+    // auto: controlled by autoGuideEnabled (separate consent — ADR-004).
+    // precompute: always excluded (no user-visible moment).
     // Fail-open: any error falls back to passing the original event unchanged.
     let guideEnabled = false;
+    let autoGuideEnabled = false;
     try {
       const preSnap = await read($, paneAtom);
       guideEnabled = preSnap.guideEnabled;
-    } catch { /* ignore; guideEnabled stays false */ }
+      autoGuideEnabled = preSnap.autoGuideEnabled;
+    } catch { /* ignore; both stay false */ }
+
+    const shouldGuide =
+      (guideEnabled && (event.trigger === 'manual' || event.trigger === 'plugin')) ||
+      (autoGuideEnabled && event.trigger === 'auto');
 
     let eventToPass = event;
-    if (guideEnabled && (event.trigger === 'manual' || event.trigger === 'plugin')) {
+    if (shouldGuide) {
       try {
         eventToPass = { ...event, instructions: composeInstructions(event.instructions) };
       } catch { /* fail-open: use original event */ }
@@ -352,10 +363,11 @@ export const register: Register = (on) => {
         contextSource: 'session.usage',
         costUsd: snap.costUsd,
         compactTrigger: event.trigger,
+        wasGuided,
       });
       await update($, historyAtom, h => appendEntry(recordCompaction(h), entry));
 
-      const wasGuided = guideEnabled && (event.trigger === 'manual' || event.trigger === 'plugin');
+      const wasGuided = shouldGuide;
       $.ui.status(`ctx:${wasGuided ? 'guided-' : ''}compacted(${event.trigger})`);
     } catch {
       $.ui.status('ctx:err');
@@ -385,9 +397,12 @@ export const register: Register = (on) => {
       const warnings = advisory.recommendations.filter(r => r.category === 'warning').length;
       const observations = advisory.recommendations.length - warnings;
 
-      // ES-010: toggle handler — fires-and-forgets the atom update (onPress is void).
+      // ES-010/011: toggle handlers — fire-and-forget the atom update (onPress is void).
       const toggleGuide = () => {
         void update($, paneAtom, m => ({ ...m, guideEnabled: !m.guideEnabled }));
+      };
+      const toggleAutoGuide = () => {
+        void update($, paneAtom, m => ({ ...m, autoGuideEnabled: !m.autoGuideEnabled }));
       };
 
       return (
@@ -489,7 +504,7 @@ export const register: Register = (on) => {
             <Text dimColor>  history: {history.entries.length}/{history.maxEntries} entries</Text>
           </Box>
 
-          {/* ES-010: Compaction Guidance prototype toggle */}
+          {/* ES-011: Compaction Guidance toggles (manual + auto) */}
           <Box flexDirection="column">
             <Text bold>Compaction Guidance <Text dimColor>(prototype)</Text></Text>
             <Box flexDirection="row">
@@ -503,6 +518,19 @@ export const register: Register = (on) => {
                 {'  '}{snap.guideEnabled
                   ? 'Augments /compact with preservation hints'
                   : 'Enable to guide /compact summaries'}
+              </Text>
+            </Box>
+            <Box flexDirection="row">
+              <Button
+                onPress={toggleAutoGuide}
+                variant={snap.autoGuideEnabled ? 'primary' : undefined}
+              >
+                {snap.autoGuideEnabled ? '● Auto active' : '○ Auto disabled'}
+              </Button>
+              <Text dimColor>
+                {'  '}{snap.autoGuideEnabled
+                  ? 'Also guides auto-compactions (ADR-004)'
+                  : 'Enable to guide engine-triggered compactions'}
               </Text>
             </Box>
           </Box>

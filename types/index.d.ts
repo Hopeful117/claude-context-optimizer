@@ -25,6 +25,7 @@ export type HistoryEntry = {
   isSubagent: boolean;
   agentId: string | undefined;
   compactTrigger: string | null;
+  wasGuided?: boolean;
 };
 
 export type MetricsHistory = {
@@ -60,6 +61,8 @@ export type PaneSnapshot = {
   lastCompactTrigger: string | null;
   /** ES-010: whether compaction guidance is active for this session. Default: false. */
   guideEnabled: boolean;
+  /** ES-011: whether guidance is active for engine-initiated (auto) compactions. Default: false. */
+  autoGuideEnabled: boolean;
 };
 
 declare module 'claude-code' {

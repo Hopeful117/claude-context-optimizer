@@ -42,6 +42,7 @@ const paneAtom = atom(
     lastCompactTrigger: null,
     guideEnabled: false,
     autoGuideEnabled: false,
+    rememberPrefs: false,
   } satisfies PaneSnapshot,
   { shape: 'pane-3' },
 );
@@ -115,7 +116,7 @@ export const register: Register = (on) => {
       const model = await $.session.model();
       const now = await $.clock.now();
 
-      const prefs = await read($, prefsAtom);
+      const prefs = await read($, prefsAtom).catch(() => ({ rememberPrefs: false, guideEnabled: false }));
       await update($, paneAtom, () => ({
         turns: 0,
         measurements: 0,
@@ -280,7 +281,7 @@ export const register: Register = (on) => {
       const newSid = await $.session.id();
       const model = await $.session.model();
 
-      const prefs = await read($, prefsAtom);
+      const prefs = await read($, prefsAtom).catch(() => ({ rememberPrefs: false, guideEnabled: false }));
       await update($, paneAtom, () => ({
         turns: 0,
         measurements: 0,
@@ -312,7 +313,7 @@ export const register: Register = (on) => {
       void $.ui.open({ id: PANE, title: 'Context Optimizer' });
       $.ui.status('ctx:ok');
     } catch {
-      $.ui.status('ctx:err');
+      try { $.ui.status('ctx:err'); } catch { /* ignore observability-only failure */ }
     } finally {
       recordTiming('session.end', Date.now() - t0);
     }
@@ -347,7 +348,11 @@ export const register: Register = (on) => {
     // Delegate to SDK (with potentially augmented instructions).
     const result = await next(eventToPass);
 
-    // --- Post-compaction state update (unchanged from v0.8.0) ---
+    // --- Post-compaction state update ---
+    // wasGuided reflects actual injection success: true only when composeInstructions
+    // succeeded and a new event object was passed to next(). If shouldGuide was true
+    // but composition threw (fail-open), eventToPass === event and wasGuided is false.
+    const wasGuided = eventToPass !== event;
     const t0 = Date.now();
     try {
       const now = await $.clock.now();
@@ -379,10 +384,9 @@ export const register: Register = (on) => {
       });
       await update($, historyAtom, h => appendEntry(recordCompaction(h), entry));
 
-      const wasGuided = shouldGuide;
       $.ui.status(`ctx:${wasGuided ? 'guided-' : ''}compacted(${event.trigger})`);
     } catch {
-      $.ui.status('ctx:err');
+      try { $.ui.status('ctx:err'); } catch { /* ignore observability-only failure */ }
     } finally {
       recordTiming('session.compact', Date.now() - t0);
     }

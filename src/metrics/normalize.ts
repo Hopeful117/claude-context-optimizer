@@ -37,6 +37,7 @@ type MakeEntryParams = {
   isSubagent?: boolean;
   agentId?: string;
   compactTrigger?: string | null;
+  wasGuided?: boolean;
 };
 
 export function normalizeContext(context: RawContext): {
@@ -77,5 +78,6 @@ export function makeEntry(params: MakeEntryParams): HistoryEntry {
     isSubagent: params.isSubagent ?? false,
     agentId: params.agentId,
     compactTrigger: params.compactTrigger ?? null,
+    wasGuided: params.wasGuided,
   };
 }

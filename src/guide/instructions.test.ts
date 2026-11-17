@@ -69,8 +69,8 @@ test('composeInstructions: existing just below limit, no room for template → e
 });
 
 test('composeInstructions: existing + separator fits but template overflows → template truncated', () => {
-  // Allow room for separator (5 chars) + partial template, but not full template.
-  const separatorLen = '\n\n---\n'.length; // 6
+  // Allow room for separator (6 chars) + partial template, but not full template.
+  const separatorLen = '\n\n---\n'.length; // 6 chars
   const templateLen = PRESERVATION_TEMPLATE.length;
   const available = separatorLen + Math.floor(templateLen / 2); // partial room
   const existing = 'x'.repeat(MAX_COMPOSED_LENGTH - available);
@@ -98,5 +98,7 @@ test('PRESERVATION_TEMPLATE: contains expected categories', () => {
 });
 
 test('PRESERVATION_TEMPLATE: within reasonable length', () => {
-  expect(PRESERVATION_TEMPLATE.length).toBeLessThan(600);
+  // All 7 ADR-004 categories are required; template is ~640 chars.
+  // Threshold guards against unintended growth, not arbitrary compression.
+  expect(PRESERVATION_TEMPLATE.length).toBeLessThan(700);
 });

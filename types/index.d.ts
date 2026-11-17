@@ -75,6 +75,8 @@ declare module 'claude-code' {
       // Migration shim: allows the engine to safely clear v0.2.0 'metrics' state.
       // Remove once all sessions have been restarted past v0.3.0.
       metrics: Shaped<null>;
+      // ES-012: persistent user guidance preference (rememberPrefs + guideEnabled).
+      prefs: Shaped<{ rememberPrefs: boolean; guideEnabled: boolean }>;
     };
   }
 }

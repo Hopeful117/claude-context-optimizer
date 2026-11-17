@@ -1,6 +1,6 @@
 {
   "name": "context-optimizer",
-  "version": "1.0.1",
-  "description": "Persistent guidance toggle + auto trigger support — v1.0.1 (ES-012)",
+  "version": "1.0.2",
+  "description": "Guided compaction stabilization — v1.0.2 (ES-013)",
   "types": "./types/index.d.ts"
 }

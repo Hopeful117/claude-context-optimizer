@@ -382,7 +382,7 @@ export const register: Register = (on) => {
             <Text>
               {'  state:  '}
               {advisory.recommendations.length === 0 ? (
-                <Text color='success'>ℹ no active recommendations</Text>
+                <Text color='success'>no active recommendations</Text>
               ) : (
                 <>
                   {warnings > 0 && <Text color='warning'>⚠ {warnings} warning{warnings > 1 ? 's' : ''}</Text>}

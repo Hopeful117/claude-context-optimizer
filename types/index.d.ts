@@ -63,6 +63,8 @@ export type PaneSnapshot = {
   guideEnabled: boolean;
   /** ES-011: whether guidance is active for engine-initiated (auto) compactions. Default: false. */
   autoGuideEnabled: boolean;
+  /** ES-012: whether the guidance toggle preference is persisted across sessions. Default: false. */
+  rememberPrefs: boolean;
 };
 
 declare module 'claude-code' {

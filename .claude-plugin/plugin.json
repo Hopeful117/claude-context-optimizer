@@ -1,6 +1,6 @@
 {
   "name": "context-optimizer",
-  "version": "1.0.0",
-  "description": "Guided compaction with comparative evaluation and auto trigger support \u2014 v1.0.0 (ES-011)",
+  "version": "1.0.1",
+  "description": "Persistent guidance toggle + auto trigger support — v1.0.1 (ES-012)",
   "types": "./types/index.d.ts"
 }

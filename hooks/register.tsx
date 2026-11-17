@@ -7,6 +7,7 @@ import { makeHistory, appendEntry, recordCompaction } from '../src/metrics/histo
 import { evaluate } from '../src/advisor/engine';
 import { recordTiming, getAllStats } from '../src/perf/timing';
 import { contextTrend } from '../src/pane/trend';
+import { evidenceLine } from '../src/pane/format';
 
 const PANE = 'context-optimizer';
 
@@ -57,14 +58,6 @@ function pct(v: number | null | undefined): string {
 
 function na(v: number | null | undefined): string {
   return v !== null && v !== undefined ? v.toLocaleString() : 'N/A';
-}
-
-/** One-line evidence summary for display under a recommendation explanation. */
-function evidenceLine(ev: { metric: string; observedValue: number; threshold?: number; sampleCount?: number }): string {
-  let s = `${ev.metric}: ${ev.observedValue}%`;
-  if (ev.threshold !== undefined) s += `  · threshold: ${ev.threshold}%`;
-  if (ev.sampleCount !== undefined && ev.sampleCount > 1) s += `  · ${ev.sampleCount} turns`;
-  return s;
 }
 
 // --- Visual theme helpers ---
@@ -137,7 +130,8 @@ export const register: Register = (on) => {
       void $.ui.open({ id: PANE, title: 'Context Optimizer' });
       $.ui.status('ctx:ok');
     } catch {
-      $.ui.status('ctx:err');
+      // Protect next(event): a status call failure must not stall the pipeline.
+      try { $.ui.status('ctx:err'); } catch { /* ignore observability-only failure */ }
     } finally {
       recordTiming('session.start', Date.now() - t0);
     }
@@ -184,7 +178,7 @@ export const register: Register = (on) => {
 
       $.ui.status(`ctx:${pct(contextSnapshot.percent)}`);
     } catch {
-      $.ui.status('ctx:err');
+      try { $.ui.status('ctx:err'); } catch { /* ignore observability-only failure */ }
     } finally {
       recordTiming('session.measure', Date.now() - t0);
     }
@@ -219,20 +213,22 @@ export const register: Register = (on) => {
         cache_creation_input_tokens: rawUsage.cache_creation_input_tokens,
       } : null;
 
+      const isSubagent = event.agentId !== undefined;
+
       // Read sessionId before the update — avoids a post-update read.
       const prevSnap = await read($, paneAtom);
       const sessionId = prevSnap.sessionId ?? '';
 
       await update($, paneAtom, m => ({
         ...m,
-        turns: m.turns + 1,
+        // Only count main-session turns — subagent turns are captured in history
+        // but not reflected in the user-facing turn counter.
+        turns: isSubagent ? m.turns : m.turns + 1,
         context: contextSnapshot,
         rateLimits,
         costUsd,
         apiUsage,
       }));
-
-      const isSubagent = event.agentId !== undefined;
       const entry = makeEntry({
         kind: 'turn',
         timestampMs: now,
@@ -248,7 +244,7 @@ export const register: Register = (on) => {
 
       $.ui.status(`ctx:${pct(contextSnapshot.percent)}`);
     } catch {
-      $.ui.status('ctx:err');
+      try { $.ui.status('ctx:err'); } catch { /* ignore observability-only failure */ }
     } finally {
       recordTiming('turn.complete', Date.now() - t0);
     }
@@ -315,6 +311,13 @@ export const register: Register = (on) => {
         ...m,
         compactionCount: m.compactionCount + 1,
         lastCompactTrigger: event.trigger,
+        // Null out stale per-window data: tokens/percent and last-turn API usage
+        // are now obsolete. context.window is preserved (model unchanged).
+        // costUsd, rateLimits, turns, measurements are still valid.
+        context: m.context !== null
+          ? { window: m.context.window, tokens: null, percent: null }
+          : null,
+        apiUsage: null,
       }));
 
       const entry = makeEntry({
@@ -379,7 +382,7 @@ export const register: Register = (on) => {
             <Text>
               {'  state:  '}
               {advisory.recommendations.length === 0 ? (
-                <Text color='success'>ℹ no active recommendations</Text>
+                <Text color='success'>no active recommendations</Text>
               ) : (
                 <>
                   {warnings > 0 && <Text color='warning'>⚠ {warnings} warning{warnings > 1 ? 's' : ''}</Text>}

@@ -203,6 +203,7 @@ export function contextGrowthRule(history: MetricsHistory): Recommendation | nul
       evidence: [{
         metric: 'contextPercentDelta',
         observedValue: delta,
+        valueUnit: 'pp',
         threshold: CONTEXT_GROWTH_RAPID_DELTA,
         sampleCount: turns.length,
       }],

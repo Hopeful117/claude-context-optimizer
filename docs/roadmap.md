@@ -6,25 +6,33 @@ Confirmed: Mod loads on Claude Desktop Code tab; all core metrics available; Pan
 
 **Exit gate met:** session ID, context window/fill/tokens, cache breakdown (via `event.usage`), rate limits, cost (Desktop confirmed), `session.measure` and `session.compact` events, `$.store` persistence, Pane UI.
 
-## Phase 1 — Context Advisor foundations (ES-002 ✅, ES-003 ✅, ES-004 ✅)
+## Phase 1 — Context Advisor Foundations ✅ COMPLETE (ES-002–ES-007)
 
 - **ES-002**: Bounded metrics history, concern separation (normalize / history / pane), 22 unit tests. ✅
 - **ES-003**: Deterministic recommendation engine — four heuristic rules, 23 new tests, Advisor section in pane. ✅
-- **ES-004**: Advisor reliability & calibration — post-compaction fix, turn/measure separation, cacheEfficiency boundary, Recommendation category, 30+ new regression tests. ✅ ← _current_
-- Overhead benchmark on a reproducible scenario (deferred from ES-001; protocol documented in ES-004 story).
+- **ES-004**: Advisor reliability & calibration — post-compaction fix, turn/measure separation, cacheEfficiency boundary, Recommendation category, 30+ new regression tests. ✅
+- **ES-005**: Runtime validation & performance — hook reliability (error containment, next(event) semantics), in-memory timing accumulator, timing tests, manual runtime validation protocol. ✅
+- **ES-006**: Advisor evaluation & calibration — structured evidence model (RecommendationEvidence), post-compaction scoping for cacheEfficiencyRule, 12 new evaluation scenarios. ✅
+- **ES-007**: Context Advisor UX — 3-level pane (session overview, advisor insights, diagnostics), fill trend, evidence display, Claude-brand visual theme. v0.7.0. ✅
 
-**Exit gate:** reproducible session history, bounded memory, negligible observer overhead, no automatic session changes.
+**Exit gate met:** reproducible session history, bounded memory, negligible observer overhead, no automatic session changes, 3-level pane with fill/trend/evidence, deterministic recommendations.
 
-## Phase 2 — Validation
+## Phase 2 — Stabilization & Effectiveness
 
-- Baseline vs advisor-assisted comparable tasks.
-- Measure task completion, quality, elapsed time, token breakdown, cache behavior, and observed quota indicators where available.
-- Investigate false-positive recommendations.
+- **ES-008**: V1 Stabilization — post-compaction display consistency (ANO-001), evidence unit formatting (ANO-002), turn counter semantics (ANO-003), hook resilience (ANO-004). v0.8.0. ← _current_
+- **ES-009** (pending ES-008): Context Advisor effectiveness evaluation.
+  - Baseline vs advisor-assisted comparable tasks.
+  - Measure task completion, quality, elapsed time, token breakdown, cache behavior.
+  - Investigate false-positive recommendations.
+  - Empirical calibration of thresholds (currently initial hypotheses, not validated values).
+
+**Phase 2 exit gate:** V1 behavioral correctness validated (ES-008), effectiveness measured against baseline (ES-009), Go/No-Go decision documented.
 
 ## Future — Context Orchestrator
 
 - Structured handoff drafts and user-confirmed session transitions.
 - Policy engine and audit trail.
 - Optional supported integrations only after separate ADRs and user approval.
+- **Not started. Requires separate ADR and product validation before any implementation.**
 
 No dates or savings percentages are promised before measurement.

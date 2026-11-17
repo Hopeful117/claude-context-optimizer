@@ -514,17 +514,17 @@ test('fresh history after reset has no history from previous session', () => {
 // ============================================================
 
 test('all rules: mixed subagent and main-session turns — only main turns affect growth/cache', () => {
-  // 2 main turns (rapid growth) + 3 subagent turns (should not count)
+  // 2 main turns + 3 subagent turns. Main turns kept below fill threshold.
   const h = historyWith(
     turnEntry(50, 0, 1000, 0, false),   // main
     turnEntry(60, 0, 1000, 1, true),    // subagent
-    turnEntry(65, 0, 1000, 2, true),    // subagent
-    turnEntry(70, 0, 1000, 3, true),    // subagent
-    turnEntry(75, 0, 1000, 4, false),   // main (only 2nd main turn)
+    turnEntry(63, 0, 1000, 2, true),    // subagent
+    turnEntry(66, 0, 1000, 3, true),    // subagent
+    turnEntry(60, 0, 1000, 4, false),   // main — only 2nd main turn, below fill threshold
   );
-  // Only 2 main turns → growth rule requires 3 → null
+  // Only 2 main-session turns → growth rule requires 3 → null
   expect(contextGrowthRule(h)).toBeNull();
-  // Fill: most recent entry (last main turn at 75%) → below high threshold
+  // Most recent entry (60%) → below medium fill threshold (70%) → null
   expect(contextFillRule(h)).toBeNull();
 });
 

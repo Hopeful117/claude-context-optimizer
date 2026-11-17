@@ -1,0 +1,22 @@
+# Dependencies / build
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.idea/
+.vscode/
+
+# Local telemetry and session data
+.data/
+data/local/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

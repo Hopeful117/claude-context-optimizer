@@ -1,13 +1,13 @@
 # ES-007 — Context Advisor UX
 
-- Status: **Design — awaiting ES-006 validation**
+- Status: **Implemented**
 - Date: 2026-11-17
-- Branch: to be created after ES-006 merges
-- Version: `0.7.0` (target)
+- Branch: `feat/es-007-context-advisor-ux`
+- Version: `0.7.0`
 
 ## Prerequisite
 
-ES-007 builds on the `evidence` model stabilized in ES-006. Do not start implementation until ES-006 is merged and its `RecommendationEvidence` interface is available on the main branch.
+ES-007 builds on the `evidence` model stabilized in ES-006 (merged as PR #12).
 
 ## Problem
 

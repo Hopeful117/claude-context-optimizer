@@ -6,6 +6,7 @@ import { makeEntry, MAX_HISTORY } from '../src/metrics/normalize';
 import { makeHistory, appendEntry, recordCompaction } from '../src/metrics/history';
 import { evaluate } from '../src/advisor/engine';
 import { recordTiming, getAllStats } from '../src/perf/timing';
+import { contextTrend } from '../src/pane/trend';
 
 const PANE = 'context-optimizer';
 
@@ -56,6 +57,46 @@ function pct(v: number | null | undefined): string {
 
 function na(v: number | null | undefined): string {
   return v !== null && v !== undefined ? v.toLocaleString() : 'N/A';
+}
+
+/** One-line evidence summary for display under a recommendation explanation. */
+function evidenceLine(ev: { metric: string; observedValue: number; threshold?: number; sampleCount?: number }): string {
+  let s = `${ev.metric}: ${ev.observedValue}%`;
+  if (ev.threshold !== undefined) s += `  · threshold: ${ev.threshold}%`;
+  if (ev.sampleCount !== undefined && ev.sampleCount > 1) s += `  · ${ev.sampleCount} turns`;
+  return s;
+}
+
+// --- Visual theme helpers ---
+
+/** Fill bar: 10-char Unicode block indicator. */
+function fillBar(pct: number | null): string {
+  if (pct === null) return '──────────';
+  const filled = Math.min(10, Math.round(pct / 10));
+  return '█'.repeat(filled) + '░'.repeat(10 - filled);
+}
+
+/** Theme color key based on context fill level. */
+function fillColor(pct: number | null): 'success' | 'warning' | 'error' | 'inactive' {
+  if (pct === null) return 'inactive';
+  if (pct >= 85) return 'error';
+  if (pct >= 70) return 'warning';
+  return 'success';
+}
+
+/** Theme color for the trend arrow. */
+function trendColor(trend: string): 'warning' | 'success' | 'subtle' | 'inactive' {
+  if (trend.startsWith('↑')) return 'warning';
+  if (trend.startsWith('→')) return 'success';
+  if (trend.startsWith('↓')) return 'subtle';
+  return 'inactive';
+}
+
+/** Compact token count: 164000 → '164k'. */
+function shortTok(v: number | null): string {
+  if (v === null) return 'N/A';
+  if (v >= 1000) return `${Math.round(v / 1000)}k`;
+  return v.toString();
 }
 
 // --- Event handlers ---
@@ -312,28 +353,69 @@ export const register: Register = (on) => {
       const perf = getAllStats();
       const perfKeys = Object.keys(perf);
 
+      const fillPct = ctx?.percent ?? null;
+      const trend = contextTrend(history);
+      const warnings = advisory.recommendations.filter(r => r.category === 'warning').length;
+      const observations = advisory.recommendations.length - warnings;
+
       return (
         <Box flexDirection="column" gap={1} paddingX={1}>
 
+          {/* Branded header */}
+          <Box flexDirection="column">
+            <Text><Text color='claude'>◆</Text>  Context Optimizer</Text>
+            <Text dimColor>{'─'.repeat(24)}</Text>
+          </Box>
+
+          {/* Level 1 — Session Overview */}
+          <Box flexDirection="column">
+            <Text bold>Session Overview</Text>
+            <Text>
+              {'  '}
+              <Text color={fillColor(fillPct)}>{fillBar(fillPct)}  {pct(fillPct)}</Text>
+              <Text dimColor>  ({shortTok(ctx?.tokens ?? null)}/{shortTok(ctx?.window ?? null)} tok)</Text>
+            </Text>
+            <Text>  trend:  <Text color={trendColor(trend)}>{trend}</Text></Text>
+            <Text>
+              {'  state:  '}
+              {advisory.recommendations.length === 0 ? (
+                <Text color='success'>ℹ no active recommendations</Text>
+              ) : (
+                <>
+                  {warnings > 0 && <Text color='warning'>⚠ {warnings} warning{warnings > 1 ? 's' : ''}</Text>}
+                  {warnings > 0 && observations > 0 && <Text>{'  '}</Text>}
+                  {observations > 0 && <Text color='claude'>ℹ {observations} observation{observations > 1 ? 's' : ''}</Text>}
+                </>
+              )}
+            </Text>
+          </Box>
+
+          {/* Level 2 — Advisor Insights */}
           <Box flexDirection="column">
             <Text bold>Advisor</Text>
             {advisory.recommendations.length > 0 ? (
               advisory.recommendations.map(r => {
+                const iconColor = r.category === 'warning' ? 'warning' : r.category === 'action' ? 'success' : 'claude';
                 const icon = r.category === 'warning' ? '⚠' : r.category === 'action' ? '→' : 'ℹ';
+                const confTag = r.confidence !== 'high' ? ` [${r.confidence[0]?.toUpperCase()}]` : '';
+                const ev = r.evidence?.[0];
+                const evText = ev !== undefined ? evidenceLine(ev) : null;
                 return (
-                  <Text>  {icon} [{r.confidence[0]?.toUpperCase()}] {r.label}: {r.explanation}</Text>
+                  <Box flexDirection="column">
+                    <Text>{'  '}<Text color={iconColor}>{icon}</Text>{confTag} {r.label}</Text>
+                    <Text dimColor>      {r.explanation}</Text>
+                    {evText !== null && (
+                      <Text dimColor>      {evText}</Text>
+                    )}
+                  </Box>
                 );
               })
             ) : (
-              <Text dimColor>  All good — no active recommendations</Text>
+              <Text dimColor>  No active recommendations — thresholds not reached.</Text>
             )}
           </Box>
 
-          <Box flexDirection="column">
-            <Text bold>Context window</Text>
-            <Text>  fill:   {pct(ctx?.percent)}  ({na(ctx?.tokens)} / {na(ctx?.window)} tokens)</Text>
-          </Box>
-
+          {/* Level 3 — Diagnostics */}
           <Box flexDirection="column">
             <Text bold>Cache (last turn)</Text>
             {api ? (
@@ -352,7 +434,7 @@ export const register: Register = (on) => {
             <Text bold>Rate limits</Text>
             {snap.rateLimits.length > 0 ? (
               snap.rateLimits.map(r => (
-                <Text>  {r.kind}: {r.percentUsed}%{r.resetsAt ? ` (resets ${r.resetsAt.slice(0, 10)})` : ''}</Text>
+                <Text>  {r.kind}: <Text color={r.percentUsed >= 90 ? 'warning' : r.percentUsed >= 75 ? 'claude' : undefined}>{r.percentUsed}%</Text>{r.resetsAt ? ` (resets ${r.resetsAt.slice(0, 10)})` : ''}</Text>
               ))
             ) : (
               <Text dimColor>  N/A — no rate limit data</Text>

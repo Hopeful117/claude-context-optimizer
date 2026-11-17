@@ -1,5 +1,5 @@
 {
-  "name": "claude-context-optimizer",
-  "version": "0.0.1",
-  "description": "Read-only Claude Code Mod feasibility prototype"
+  "name": "context-optimizer",
+  "version": "0.1.0",
+  "description": "Observe turns and measurements — read-only context intelligence prototype"
 }

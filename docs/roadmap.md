@@ -28,6 +28,13 @@ Confirmed: Mod loads on Claude Desktop Code tab; all core metrics available; Pan
 
 **Phase 2 exit gate:** V1 behavioral correctness validated (ES-008), effectiveness measured against baseline (ES-009), Go/No-Go decision documented.
 
+## Phase 3 — Compaction Intelligence (proposed — pending ADR-004 acceptance)
+
+- **ADR-004** (proposed, 2026-11-17): User-Controlled Compaction Intelligence — architecture for a minimal, opt-in prototype that augments compaction instructions to improve context continuity. Status: Proposed. See `docs/architecture/ADR-004-user-controlled-compaction-intelligence.md`.
+- **ES-010** (not started): Guided Compaction Prototype — validate whether preservation instructions on user-initiated compactions measurably improve task resumption. Entry criteria defined in ADR-004. Requires ADR-004 acceptance.
+
+**Phase 3 entry gate:** ADR-004 accepted by human review.
+
 ## Future — Context Orchestrator
 
 - Structured handoff drafts and user-confirmed session transitions.

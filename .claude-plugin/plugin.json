@@ -1,6 +1,6 @@
 {
   "name": "context-optimizer",
-  "version": "1.0.2",
-  "description": "Guided compaction stabilization — v1.0.2 (ES-013)",
+  "version": "1.0.3",
+  "description": "Evaluation data collection — v1.0.3 (ES-014)",
   "types": "./types/index.d.ts"
 }

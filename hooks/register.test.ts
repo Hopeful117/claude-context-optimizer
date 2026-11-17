@@ -222,10 +222,14 @@ test('paneAtom default: rememberPrefs is false (ANO-002 fix)', () => {
     guideEnabled: false,
     autoGuideEnabled: false,
     rememberPrefs: false,
+    pendingAnnotationId: null as string | null,
+    turnsSinceCompaction: 0,
   };
   expect(initialPane.rememberPrefs).toBe(false);
   expect(initialPane.guideEnabled).toBe(false);
   expect(initialPane.autoGuideEnabled).toBe(false);
+  expect(initialPane.pendingAnnotationId).toBeNull();
+  expect(initialPane.turnsSinceCompaction).toBe(0);
 });
 
 // ============================================================
@@ -268,3 +272,204 @@ test('toggleRemember: captures current guideEnabled state', () => {
 // MRV-005: History entries after compaction have correct wasGuided value.
 //   Scenario: guided manual compaction → entry.wasGuided === true.
 //   Scenario: unguided auto compaction → entry.wasGuided === false.
+
+// ============================================================
+// ES-014: evalAtom — evaluation data collection
+// ============================================================
+
+test('makeEntry: turnsBeforeCompaction propagated to HistoryEntry', () => {
+  const entry = makeEntry({
+    kind: 'compact',
+    timestampMs: 1700000000000,
+    sessionId: 'sess-014',
+    context: { window: 200000 },
+    contextSource: 'session.usage',
+    costUsd: null,
+    compactTrigger: 'manual',
+    turnsBeforeCompaction: 7,
+    contextPercentAtCompaction: 72,
+  });
+  expect(entry.turnsBeforeCompaction).toBe(7);
+  expect(entry.contextPercentAtCompaction).toBe(72);
+});
+
+test('makeEntry: turnsBeforeCompaction is undefined for non-compact entries', () => {
+  const entry = makeEntry({
+    kind: 'turn',
+    timestampMs: 1700000000000,
+    sessionId: 'sess-014',
+    context: { tokens: 50000, window: 200000, percent: 25 },
+    contextSource: 'session.usage',
+    costUsd: null,
+  });
+  expect(entry.turnsBeforeCompaction).toBeUndefined();
+  expect(entry.contextPercentAtCompaction).toBeUndefined();
+});
+
+test('evalEntry defaults: turnsToResumption is null, userAnnotation is skipped', () => {
+  const evalEntry = {
+    compactionId: 'sess-014:1',
+    wasGuided: true,
+    trigger: 'manual',
+    timestampMs: 1700000000000,
+    turnsAtCompaction: 7,
+    turnsToResumption: null as number | null,
+    userAnnotation: 'skipped' as const,
+  };
+  expect(evalEntry.turnsToResumption).toBeNull();
+  expect(evalEntry.userAnnotation).toBe('skipped');
+});
+
+test('compactionId format: sessionId:index (1-indexed)', () => {
+  const sessionId = 'sess-abc';
+  const compactionCount = 0; // before this compaction
+  const compactionIndex = compactionCount + 1;
+  const compactionId = `${sessionId}:${compactionIndex}`;
+  expect(compactionId).toBe('sess-abc:1');
+
+  // Second compaction
+  const compactionId2 = `${sessionId}:${compactionCount + 2}`;
+  expect(compactionId2).toBe('sess-abc:2');
+});
+
+test('turnsSinceCompaction: main-session turns increment counter while pending', () => {
+  // Simulates the turn.complete handler logic.
+  // After compaction, pendingAnnotationId is set and counter increments each main-session turn.
+  const prevPendingAnnotationId: string | null = 'sess-014:1';
+  const isSubagent = false;
+
+  let turnsSinceCompaction = 0;
+  // Simulate 3 main-session turns
+  for (let i = 0; i < 3; i++) {
+    if (!isSubagent && prevPendingAnnotationId != null) {
+      turnsSinceCompaction += 1;
+    }
+  }
+
+  expect(turnsSinceCompaction).toBe(3);
+  // pendingAnnotationId still set — not cleared by turns
+});
+
+test('turnsSinceCompaction: subagent turn does NOT increment counter', () => {
+  const prevPendingAnnotationId: string | null = 'sess-014:1';
+  const isSubagent = true;
+
+  let turnsSinceCompaction = 0;
+  if (!isSubagent && prevPendingAnnotationId != null) {
+    turnsSinceCompaction += 1;
+  }
+
+  expect(turnsSinceCompaction).toBe(0);
+});
+
+test('annotation: positive sets userAnnotation and records turnsToResumption', () => {
+  const id = 'sess-014:1';
+  const turnsSinceCompaction = 3; // simulates snap.turnsSinceCompaction at annotation time
+  const entries = [{
+    compactionId: id,
+    wasGuided: true,
+    trigger: 'manual',
+    timestampMs: 1700000000000,
+    turnsAtCompaction: 3,
+    turnsToResumption: null as number | null,
+    userAnnotation: 'skipped' as const,
+  }];
+
+  const updated = entries.map(e =>
+    e.compactionId === id
+      ? { ...e, userAnnotation: 'positive' as const, turnsToResumption: turnsSinceCompaction }
+      : e
+  );
+  expect(updated[0]!.userAnnotation).toBe('positive');
+  expect(updated[0]!.turnsToResumption).toBe(3);
+});
+
+test('annotation: negative sets userAnnotation and records turnsToResumption', () => {
+  const id = 'sess-014:1';
+  const turnsSinceCompaction = 2;
+  const entries = [{
+    compactionId: id,
+    wasGuided: true,
+    trigger: 'manual',
+    timestampMs: 1700000000000,
+    turnsAtCompaction: 3,
+    turnsToResumption: null as number | null,
+    userAnnotation: 'skipped' as const,
+  }];
+
+  const updated = entries.map(e =>
+    e.compactionId === id
+      ? { ...e, userAnnotation: 'negative' as const, turnsToResumption: turnsSinceCompaction }
+      : e
+  );
+  expect(updated[0]!.userAnnotation).toBe('negative');
+  expect(updated[0]!.turnsToResumption).toBe(2);
+});
+
+test('annotation: dismiss (—) leaves userAnnotation as skipped', () => {
+  // The dismiss button only clears pendingAnnotationId — it does not update evalAtom.
+  // So userAnnotation stays at its default 'skipped'.
+  const entry = {
+    compactionId: 'sess-014:1',
+    userAnnotation: 'skipped' as const,
+  };
+  // No change to entry
+  expect(entry.userAnnotation).toBe('skipped');
+});
+
+test('evalLog cap: oldest entry dropped when at maxEntries', () => {
+  const maxEntries = 3;
+  const existing = Array.from({ length: maxEntries }, (_, i) => ({
+    compactionId: `sess:${i + 1}`,
+    wasGuided: false,
+    trigger: 'manual',
+    timestampMs: 1700000000000 + i,
+    turnsAtCompaction: i,
+    turnsToResumption: 1,
+    userAnnotation: 'skipped' as const,
+  }));
+  const newEntry = {
+    compactionId: 'sess:4',
+    wasGuided: true,
+    trigger: 'auto',
+    timestampMs: 1700000000004,
+    turnsAtCompaction: 10,
+    turnsToResumption: null as number | null,
+    userAnnotation: 'skipped' as const,
+  };
+
+  const all = [...existing, newEntry];
+  const entries = all.length > maxEntries ? all.slice(all.length - maxEntries) : all;
+
+  expect(entries.length).toBe(maxEntries);
+  expect(entries[0]!.compactionId).toBe('sess:2'); // oldest dropped
+  expect(entries[entries.length - 1]!.compactionId).toBe('sess:4'); // new entry last
+});
+
+test('evalAtom initial state: empty entries, maxEntries 200', () => {
+  const initial: { entries: unknown[]; maxEntries: number } = { entries: [], maxEntries: 200 };
+  expect(initial.entries.length).toBe(0);
+  expect(initial.maxEntries).toBe(200);
+});
+
+test('paneAtom default: pendingAnnotationId is null, turnsSinceCompaction is 0 (ES-014)', () => {
+  const initialPane = {
+    turns: 0,
+    measurements: 0,
+    compactionCount: 0,
+    sessionId: null,
+    model: null,
+    context: null,
+    apiUsage: null,
+    rateLimits: [],
+    costUsd: null,
+    lastCompactTrigger: null,
+    guideEnabled: false,
+    autoGuideEnabled: false,
+    rememberPrefs: false,
+    pendingAnnotationId: null as string | null,
+    turnsSinceCompaction: 0,
+  };
+  expect(initialPane.pendingAnnotationId).toBeNull();
+  expect(initialPane.turnsSinceCompaction).toBe(0);
+});

@@ -38,6 +38,8 @@ type MakeEntryParams = {
   agentId?: string;
   compactTrigger?: string | null;
   wasGuided?: boolean;
+  turnsBeforeCompaction?: number;
+  contextPercentAtCompaction?: number | null;
 };
 
 export function normalizeContext(context: RawContext): {
@@ -79,5 +81,7 @@ export function makeEntry(params: MakeEntryParams): HistoryEntry {
     agentId: params.agentId,
     compactTrigger: params.compactTrigger ?? null,
     wasGuided: params.wasGuided,
+    turnsBeforeCompaction: params.turnsBeforeCompaction,
+    contextPercentAtCompaction: params.contextPercentAtCompaction,
   };
 }

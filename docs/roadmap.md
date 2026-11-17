@@ -6,11 +6,12 @@ Confirmed: Mod loads on Claude Desktop Code tab; all core metrics available; Pan
 
 **Exit gate met:** session ID, context window/fill/tokens, cache breakdown (via `event.usage`), rate limits, cost (Desktop confirmed), `session.measure` and `session.compact` events, `$.store` persistence, Pane UI.
 
-## Phase 1 — Context Advisor foundations (ES-002 ✅, ES-003 ✅)
+## Phase 1 — Context Advisor foundations (ES-002 ✅, ES-003 ✅, ES-004 ✅)
 
 - **ES-002**: Bounded metrics history, concern separation (normalize / history / pane), 22 unit tests. ✅
-- **ES-003**: Deterministic recommendation engine — four heuristic rules, 23 new tests, Advisor section in pane. ✅ ← _current_
-- Overhead benchmark on a reproducible scenario (deferred from ES-001).
+- **ES-003**: Deterministic recommendation engine — four heuristic rules, 23 new tests, Advisor section in pane. ✅
+- **ES-004**: Advisor reliability & calibration — post-compaction fix, turn/measure separation, cacheEfficiency boundary, Recommendation category, 30+ new regression tests. ✅ ← _current_
+- Overhead benchmark on a reproducible scenario (deferred from ES-001; protocol documented in ES-004 story).
 
 **Exit gate:** reproducible session history, bounded memory, negligible observer overhead, no automatic session changes.
 

@@ -228,14 +228,16 @@ export const register: Register = (on) => {
     return (
       <Box flexDirection="column" gap={1} paddingX={1}>
 
-        {advisory.recommendations.length > 0 && (
-          <Box flexDirection="column">
-            <Text bold>Advisor</Text>
-            {advisory.recommendations.map(r => (
+        <Box flexDirection="column">
+          <Text bold>Advisor</Text>
+          {advisory.recommendations.length > 0 ? (
+            advisory.recommendations.map(r => (
               <Text>  [{r.confidence[0]?.toUpperCase()}] {r.label}: {r.explanation}</Text>
-            ))}
-          </Box>
-        )}
+            ))
+          ) : (
+            <Text dimColor>  All good — no active recommendations</Text>
+          )}
+        </Box>
 
         <Box flexDirection="column">
           <Text bold>Context window</Text>

@@ -2,7 +2,7 @@
 
 Local-first context intelligence for Claude Code, including the Code experience in Claude Desktop where supported.
 
-> Status: **Phase 1 — Context Advisor foundations**. ES-001 (Mod feasibility spike) complete: Mod loads on Claude Desktop Code tab, all core metrics confirmed. Building bounded metrics history and observability layer for V1.
+> Status: **Phase 2 — Stabilization & Effectiveness**. V1 (ES-001–ES-007) is implemented. ES-008 stabilizes V1 before effectiveness evaluation.
 
 ## Product direction
 
@@ -32,7 +32,7 @@ The objective is to reduce **avoidable** context overhead while preserving usefu
 
 The Mod installs as `context-optimizer` under `~/.claude/dev-mods/<session-id>/context-optimizer/`. Hot-reload is active during development.
 
-Current milestone: **ES-002 — Observability foundations** — bounded metrics history, concern separation, and unit tests. See [ES-002 engineering story](docs/stories/ES-002-observability-foundations.md).
+Current milestone: **ES-008 — Context Advisor V1 Stabilization** — fixing post-compaction display consistency, evidence formatting, turn counter semantics, and hook resilience. See [ES-008 engineering story](docs/stories/ES-008-context-advisor-v1-stabilization.md).
 
 ## License
 

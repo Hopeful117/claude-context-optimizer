@@ -1,6 +1,6 @@
 {
   "name": "context-optimizer",
-  "version": "0.7.0",
-  "description": "Observe context window, cache, and rate limits — Context Advisor V1 with 3-level pane and structured recommendations",
+  "version": "0.8.0",
+  "description": "Observe context window, cache, and rate limits — Context Advisor V1 stabilized (ES-008)",
   "types": "./types/index.d.ts"
 }

@@ -538,3 +538,72 @@ test('contextFillRule: subagent turn at high fill — does not trigger (uses mos
   const r = contextFillRule(h);
   expect(r?.id).toBe('context-fill-high');
 });
+
+// ============================================================
+// ES-008 — ANO-002: evidence.valueUnit field
+// ============================================================
+
+test('contextGrowthRule: evidence has valueUnit pp (not %)', () => {
+  const h = historyWith(
+    turnEntry(50, 0, 1000, 0),
+    turnEntry(60, 0, 1000, 1),
+    turnEntry(50 + CONTEXT_GROWTH_RAPID_DELTA + 1, 0, 1000, 2),
+  );
+  const r = contextGrowthRule(h);
+  expect(r?.evidence?.[0]?.valueUnit).toBe('pp');
+});
+
+test('contextGrowthRule: evidence observedValue is a delta (percentage points)', () => {
+  const h = historyWith(
+    turnEntry(50, 0, 1000, 0),
+    turnEntry(60, 0, 1000, 1),
+    turnEntry(70, 0, 1000, 2),  // delta = 20
+  );
+  const r = contextGrowthRule(h);
+  expect(r?.evidence?.[0]?.observedValue).toBe(20);
+  expect(r?.evidence?.[0]?.valueUnit).toBe('pp');
+});
+
+test('contextFillRule: evidence has no valueUnit (defaults to %)', () => {
+  const r = contextFillRule(historyWith(turnEntry(CONTEXT_FILL_HIGH)));
+  expect(r?.evidence?.[0]?.valueUnit).toBeUndefined();
+});
+
+test('cacheEfficiencyRule: evidence has no valueUnit (defaults to %)', () => {
+  const turns = Array.from({ length: CACHE_EFFICIENCY_MIN_TURNS }, () => turnEntry(50, 10, 990));
+  const r = cacheEfficiencyRule(historyWith(...turns));
+  expect(r?.evidence?.[0]?.valueUnit).toBeUndefined();
+});
+
+test('rateLimitRule: evidence has no valueUnit (defaults to %)', () => {
+  const r = rateLimitRule([{ kind: 'rpm', percentUsed: RATE_LIMIT_HIGH }]);
+  expect(r?.evidence?.[0]?.valueUnit).toBeUndefined();
+});
+
+// ============================================================
+// ES-008 — ANO-001: post-compaction advisory state (rules perspective)
+// ============================================================
+
+test('contextFillRule: null immediately after compaction — no stale recommendation', () => {
+  // This is the ES-004 regression test, retained for ANO-001 non-regression.
+  const h = historyWith(turnEntry(CONTEXT_FILL_HIGH, 0, 1000, 0), compactEntry(1));
+  expect(contextFillRule(h)).toBe(null);
+});
+
+test('contextGrowthRule: null immediately after compaction — no stale growth detection', () => {
+  // Pre-compaction had rapid growth, but post-compaction window is empty.
+  const h = historyWith(
+    turnEntry(50, 0, 1000, 0),
+    turnEntry(60, 0, 1000, 1),
+    turnEntry(70, 0, 1000, 2),
+    compactEntry(3),
+    // No turns after compaction
+  );
+  expect(contextGrowthRule(h)).toBe(null);
+});
+
+test('cacheEfficiencyRule: null immediately after compaction — insufficient new-window turns', () => {
+  const preCompact = Array.from({ length: 10 }, (_, i) => turnEntry(50, 10, 990, i));
+  const h = historyWith(...preCompact, compactEntry(100));
+  expect(cacheEfficiencyRule(h)).toBe(null);
+});

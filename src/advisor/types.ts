@@ -24,6 +24,12 @@ export type RecommendationEvidence = {
   metric: string;
   /** The measured value that crossed or compared to the threshold. */
   observedValue: number;
+  /**
+   * Unit of observedValue and threshold for display purposes.
+   * '%' (default when absent): absolute percentage, e.g. '85%'.
+   * 'pp': percentage-point delta, e.g. '+17 pp'.
+   */
+  valueUnit?: '%' | 'pp';
   /** The threshold the observed value was compared to, when applicable. */
   threshold?: number;
   /** Number of data points (entries or turns) used for this reading. */

@@ -1,7 +1,7 @@
 # ES-001 — Claude Code Mods feasibility report
 
 - Date: 2026-11-17
-- Status: **TypeScript API verified; partial live runtime validation**
+- Status: **Live runtime validation complete — cache breakdown confirmed via event.usage**
 - Engine build: 2.1.325 (from installed type declarations path)
 - Source of truth: `/tmp/claude-1000/bundled-skills/2.1.325/.../plugin-authoring/types/claude-code.d.ts`
 
@@ -26,6 +26,8 @@
 - `session.start` hook fires on load; `$.session.id()`, `$.session.version()`, `$.session.model()` called without error.
 - Status line (`$.ui.status()`) visible and updating.
 - `turn.complete` and `session.measure` hooks fire in live session.
+- Pane (`$.ui.open()` + `ui.render{component=Pane}`) renders correctly in Claude Desktop Code tab.
+- `atom`/`read`/`update` reactive state works; pane updates after each turn.
 
 ---
 
@@ -38,14 +40,16 @@
 | Context window size (tokens) | `context.window` | **AVAILABLE** | Always present in `SessionContextUsage`; the model's declared window size |
 | Tokens used (total input) | `context.tokens` | **AVAILABLE** | Optional — absent before first API response of the live window; includes uncached + cache_write + cache_read combined |
 | Usage percentage | `context.percent` | **AVAILABLE** | Optional — absent before first API response; integer 0–100 |
-| Uncached input tokens (isolated) | `breakdown.apiUsage.input_tokens` | **AVAILABLE (conditional)** | Only with `$.session.usage({ breakdown: 'summary' })` on a bound session; `summary` is local estimate, no extra API call |
-| Output tokens | `breakdown.apiUsage.output_tokens` | **AVAILABLE (conditional)** | Same: needs `breakdown` call on bound session |
-| Cache read tokens | `breakdown.apiUsage.cache_read_input_tokens` | **AVAILABLE (conditional)** | Same: needs `breakdown` call |
-| Cache write tokens | `breakdown.apiUsage.cache_creation_input_tokens` | **AVAILABLE (conditional)** | Same: needs `breakdown` call |
-| Breakdown categories (by type) | `breakdown.categories` | **AVAILABLE (conditional)** | Per-category token split as `/context` shows; needs `breakdown` call |
-| Auto-compact threshold | `breakdown.autoCompactThreshold` | **AVAILABLE (conditional)** | Absent when auto-compact is off |
+| Uncached input tokens (isolated) | `event.usage.input_tokens` on `turn.complete` | **AVAILABLE — CONFIRMED LIVE** | Direct from API response via `TurnCompleteInput.usage`; no extra call needed |
+| Output tokens | `event.usage.output_tokens` on `turn.complete` | **AVAILABLE — CONFIRMED LIVE** | Same source |
+| Cache read tokens | `event.usage.cache_read_input_tokens` on `turn.complete` | **AVAILABLE — CONFIRMED LIVE** | Same source; confirmed non-null in live session |
+| Cache write tokens | `event.usage.cache_creation_input_tokens` on `turn.complete` | **AVAILABLE — CONFIRMED LIVE** | Same source |
+| Model of the turn | `event.usage.model` on `turn.complete` | **AVAILABLE** | `TurnUsage` extends `ModelUsage` with `model: string` |
+| `breakdown.apiUsage` via `$.session.usage({ breakdown })` | `context.breakdown.apiUsage` | **UNAVAILABLE in practice** | Returns null in Desktop Code tab; requires "bound session" per types — condition not met in tested environment |
+| Breakdown categories (by type) | `breakdown.categories` | **UNVERIFIED** | Needs `breakdown` call; session binding condition unclear |
+| Auto-compact threshold | `breakdown.autoCompactThreshold` | **UNVERIFIED** | Typed; not tested |
 
-**Important distinction:** `context.tokens` is the **combined** input (uncached + cache_write + cache_read). It does NOT distinguish cache behavior. For cache breakdown, `{ breakdown: 'summary' }` is cheap (local estimate); `{ breakdown: 'full' }` makes token-count API calls and is expensive — not suitable for hooks.
+**Key finding:** The correct source for per-turn cache and token breakdown is `event.usage` on `turn.complete` — a `TurnUsage` (= `ModelUsage & { model }`) carried directly on the event. `$.session.usage({ breakdown: 'summary' }).context.breakdown.apiUsage` returns null in the Desktop Code tab. Do not use `breakdown` for cache metrics in hooks.
 
 ### 3.2 Rate limits
 
@@ -110,12 +114,14 @@ The following was directly observed with the spike mod loaded in this session:
 - **`$.store.set()` callable** without error from hooks.
 - **`context.window` always present** in `$.session.usage()` response.
 - **`context.tokens` and `context.percent`**: present after the first API response (observed as non-null in active session).
+- **`event.usage` on `turn.complete`**: confirmed AVAILABLE — `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` all display real non-null values in the pane.
+- **`breakdown.apiUsage`**: confirmed NULL in Desktop Code tab — `$.session.usage({ breakdown: 'summary' }).context.breakdown.apiUsage` returns null; not a usable source for cache metrics in this environment.
+- **Pane**: `$.ui.open()` + `ui.render{Pane}` confirmed functional on Desktop; `atom`/`read`/`update` reactive state works correctly.
 - **`cost`**: presence on Desktop not fully verified (field optional by type; CLI confirmed in types).
 - **`rateLimits`**: array present; content depends on account type.
 
 Fields that could not be fully verified live without instrumenting a compaction:
 - `session.compact` event payload structure (typed, hook implemented, not triggered in spike).
-- `breakdown.apiUsage` cache read/write breakdown (typed, not called in spike to avoid overhead).
 
 ---
 
@@ -179,7 +185,7 @@ For interactions that require human action to verify:
 |---|---|
 | `cost.usd` availability on Desktop | Unverified — optional field, confirmed on CLI |
 | `session.measure` exact threshold | Undocumented — observed to fire, but threshold increment not measured |
-| `breakdown.apiUsage` cache fields | Typed as `ModelUsage \| null`; null before first response — not live-verified |
+| `breakdown.apiUsage` via `$.session.usage({ breakdown })` | **Confirmed null** in Desktop Code tab — do not use for cache metrics |
 | Subagent session isolation | `agentId` present in some events; not tested in spike |
 | Compaction event payload | Typed and hooked; trigger not exercised in spike |
 | Overhead measurement | No baseline scenario; timing benchmarks deferred |
@@ -199,8 +205,9 @@ The following metrics are reliably available for V1:
 - `session.measure` event for reactive updates — suitable for threshold-triggered advisories.
 - Local `$.store` persistence — suitable for cross-turn baselines and trend detection.
 
-**Additional capability (cheap, not yet verified live):**
-- `{ breakdown: 'summary' }` gives `breakdown.apiUsage` with `cache_read_input_tokens` and `cache_creation_input_tokens` — enables cache behavior analysis without extra API calls.
+**Cache breakdown — confirmed live via `event.usage` on `turn.complete`:**
+- `event.usage.cache_read_input_tokens` and `cache_creation_input_tokens` confirmed non-null in Desktop Code tab.
+- `breakdown.apiUsage` confirmed null in Desktop Code tab — not a usable source; `event.usage` on `turn.complete` is the correct approach.
 
 **Deferred to follow-on spike:**
 - Full cache breakdown verification (`breakdown.apiUsage` live values).

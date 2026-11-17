@@ -74,8 +74,9 @@ export const register: Register = (on) => {
 
   on('turn.complete', async ($, event, next) => {
     const usage = await $.session.usage();
-    const usageWithBreakdown = await $.session.usage({ breakdown: 'summary' });
-    const apiUsage = usageWithBreakdown.context.breakdown?.apiUsage ?? null;
+    // event.usage carries the turn's actual API token counts directly.
+    // Absent on interrupt or API error; preferred over breakdown.apiUsage.
+    const apiUsage = event.usage ?? null;
 
     await update($, metrics, m => ({
       ...m,

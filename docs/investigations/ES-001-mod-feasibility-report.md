@@ -123,7 +123,32 @@ The following was directly observed with the spike mod loaded in this session:
 
 ---
 
-## 5. What is NOT accessible
+## 5. Metric semantics — guaranteed vs observed
+
+Understanding the precise meaning of each exposed value is required before aggregation.
+
+| Field | Scope | Cumulative? | Notes |
+|---|---|---|---|
+| `context.tokens` | Instantaneous — total input of **last API response** (uncached + cache_read + cache_write). The status line's `total_input_tokens`. | No | Absent until first API response of the live window; resets after compaction. `input_tokens + cache_read_input_tokens + cache_creation_input_tokens` from that response |
+| `context.percent` | Instantaneous — `context.tokens / context.window × 100`, rounded. | No | Absent same condition as `context.tokens` |
+| `context.window` | Model's declared context window in tokens. | Stable | Present always; changes only on model switch |
+| `event.usage.input_tokens` | Per-turn: uncached input tokens across all model calls in the turn. NOT the full context, only the uncached portion. | No — per turn | Absent on aborted/error turns |
+| `event.usage.cache_read_input_tokens` | Per-turn: tokens served from prompt cache across all model calls in the turn. | No — per turn | Grows with context size; not meaningful to sum naively across turns |
+| `event.usage.cache_creation_input_tokens` | Per-turn: tokens written to prompt cache across all model calls in the turn. | No — per turn | Same caution |
+| `event.usage.output_tokens` | Per-turn: tokens generated across all model calls in the turn. | No — per turn | — |
+| `cost.usd` | Session-cumulative: sum of every priced API response since session start (or last `/clear`). | **Yes** | Monotonically increasing; reset by `/clear` |
+| `rateLimits[].percentUsed` | Instantaneous: last reported value from API responses. | No | May not update every turn if `session.measure` threshold not crossed |
+| `session.measure.changed` | Flags which units moved since the last measurement the hook observed. | N/A | Context fill change, rate-limit window change by ≥1 point, or any cost growth |
+
+**Subagent identification:** `turn.complete` carries `agentId?: string`. Absent on the main loop; present for subagent turns. Calling `$.session.usage()` from a subagent's `turn.complete` returns the **main session's** context unless `{ agentId }` is passed. Subagent turns should be flagged but not conflated with main-loop context measurements.
+
+**Post-compaction gap:** After `session.compact`, `context.tokens` and `context.percent` are absent until the next API response. Any entry recorded between compact and the next response has `contextTokens: null`.
+
+**Do not aggregate:** `event.usage.*_tokens` from multiple turns cannot be summed to derive a session total without accounting for the growing context. Use `cost.usd` as the session-level cost metric; use per-turn values only as per-turn snapshots.
+
+---
+
+## 7. What is NOT accessible
 
 - **Per-request token breakdown** (input / output / cache_read / cache_write) without `breakdown` call.
 - **Subscription quota details** (token limits per window, plan type) — not in types.
@@ -133,7 +158,7 @@ The following was directly observed with the spike mod loaded in this session:
 
 ---
 
-## 6. Privacy and security review
+## 8. Privacy and security review
 
 - The spike mod collects only: session ID, engine version, model name, context token counts, rate-limit percentages, cost USD total, timestamps, turn/measurement counters.
 - No prompt body, tool output, code, file content, or credentials are collected or stored.
@@ -143,7 +168,7 @@ The following was directly observed with the spike mod loaded in this session:
 
 ---
 
-## 7. Performance notes
+## 9. Performance notes
 
 - `$.session.usage()` without `breakdown`: cheap — reads cached engine state, no API call.
 - `$.session.usage({ breakdown: 'summary' })`: local estimate, no API call, acceptable for hooks.
@@ -153,7 +178,7 @@ The following was directly observed with the spike mod loaded in this session:
 
 ---
 
-## 8. Manual test protocol
+## 10. Manual test protocol
 
 For interactions that require human action to verify:
 
@@ -163,8 +188,9 @@ For interactions that require human action to verify:
 3. Verify: `$.store` key `ctx.lastCompact` is set.
 
 **T2 — cost field on Desktop:**
-1. After at least one turn, check if status line shows `$X.XXXX` or `cost=N/A`.
-2. If `cost=N/A`, the Desktop host does not expose the cost ledger via `$.session.usage()`.
+1. After at least one turn, check if the pane's Cost section shows `$X.XXXX` or `N/A`.
+2. If `N/A`, the Desktop host does not expose the cost ledger via `$.session.usage()`.
+3. **Result (2026-11-17):** `$X.XXXX` confirmed — cost is available on Desktop Code tab.
 
 **T3 — rateLimits on subscription account:**
 1. Check status line for `five_hour:X%` or `seven_day:X%`.
@@ -177,7 +203,7 @@ For interactions that require human action to verify:
 
 ---
 
-## 9. Limitations and open questions
+## 11. Limitations and open questions
 
 | Item | Status |
 |---|---|
@@ -191,7 +217,7 @@ For interactions that require human action to verify:
 
 ---
 
-## 10. Go/no-go recommendation
+## 12. Go/no-go recommendation
 
 **Go — for Context Advisor V1 using Claude Code Mods.**
 
@@ -218,7 +244,7 @@ The following metrics are reliably available for V1:
 
 ---
 
-## 11. Obsolete documentation
+## 13. Obsolete documentation
 
 The following items in the previous version of this report were marked "Pending" and are now resolved:
 

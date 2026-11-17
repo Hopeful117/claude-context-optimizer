@@ -49,6 +49,7 @@ export function contextFillRule(history: MetricsHistory): Recommendation | null 
         label: 'Context nearly full',
         explanation: `Context is at ${pct}% — the window is filling up. If the task continues much longer, a manual /compact or a fresh session may be worth considering.`,
         confidence: 'high',
+        evidence: [{ metric: 'contextPercent', observedValue: pct, threshold: CONTEXT_FILL_HIGH, sampleCount: 1 }],
       };
     }
     if (pct >= CONTEXT_FILL_MEDIUM) {
@@ -58,6 +59,7 @@ export function contextFillRule(history: MetricsHistory): Recommendation | null 
         label: 'Context fill is elevated',
         explanation: `Context is at ${pct}% — the window is over ${CONTEXT_FILL_MEDIUM}% full. Worth keeping in mind if the task has a long way to go.`,
         confidence: 'medium',
+        evidence: [{ metric: 'contextPercent', observedValue: pct, threshold: CONTEXT_FILL_MEDIUM, sampleCount: 1 }],
       };
     }
     return null; // pct < threshold
@@ -101,13 +103,19 @@ export function cacheEfficiencyRule(history: MetricsHistory): Recommendation | n
 
   const ratio = totalCacheRead / totalInput;
   if (ratio < CACHE_EFFICIENCY_LOW_RATIO) {
-    const pct = Math.round(ratio * 100);
+    const ratioPct = Math.round(ratio * 100);
     return {
       id: 'cache-efficiency-low',
       category: 'observation',
       label: 'Low cache read ratio',
-      explanation: `${pct}% of recent input tokens came from cache across ${turns.length} turns. This may be normal for a new task or after a large context change. If it persists long-term, a stable CLAUDE.md helps cache efficiency.`,
+      explanation: `${ratioPct}% of recent input tokens came from cache across ${turns.length} turns. This may be normal for a new task or after a large context change. If it persists long-term, a stable CLAUDE.md helps cache efficiency.`,
       confidence: 'low',
+      evidence: [{
+        metric: 'cacheReadRatio',
+        observedValue: ratioPct,
+        threshold: Math.round(CACHE_EFFICIENCY_LOW_RATIO * 100),
+        sampleCount: turns.length,
+      }],
     };
   }
   return null;
@@ -137,6 +145,7 @@ export function rateLimitRule(rateLimits: readonly RateLimitSnapshot[]): Recomme
       label: 'Rate limit nearly exhausted',
       explanation: `${highest.kind} rate limit is at ${highest.percentUsed}% — slow down or wait for the reset.`,
       confidence: 'high',
+      evidence: [{ metric: highest.kind, observedValue: highest.percentUsed, threshold: RATE_LIMIT_HIGH, sampleCount: 1 }],
     };
   }
   if (highest.percentUsed >= RATE_LIMIT_MEDIUM) {
@@ -146,6 +155,7 @@ export function rateLimitRule(rateLimits: readonly RateLimitSnapshot[]): Recomme
       label: 'Rate limit above 75%',
       explanation: `${highest.kind} rate limit is at ${highest.percentUsed}% — monitor usage to avoid hitting the limit.`,
       confidence: 'medium',
+      evidence: [{ metric: highest.kind, observedValue: highest.percentUsed, threshold: RATE_LIMIT_MEDIUM, sampleCount: 1 }],
     };
   }
   return null;
@@ -190,6 +200,12 @@ export function contextGrowthRule(history: MetricsHistory): Recommendation | nul
       label: 'Rapid context growth',
       explanation: `Context grew ${delta}% across the last ${CONTEXT_GROWTH_MIN_TURNS} main-session turns — at this rate the window could fill quickly.`,
       confidence: 'medium',
+      evidence: [{
+        metric: 'contextPercentDelta',
+        observedValue: delta,
+        threshold: CONTEXT_GROWTH_RAPID_DELTA,
+        sampleCount: turns.length,
+      }],
     };
   }
   return null;

@@ -14,6 +14,22 @@ export type Confidence = 'high' | 'medium' | 'low';
  */
 export type Category = 'observation' | 'warning' | 'action';
 
+/**
+ * Structured evidence for a recommendation.
+ * Values derive directly from the metrics that triggered the rule —
+ * no invented or interpolated data.
+ */
+export type RecommendationEvidence = {
+  /** Name of the metric being measured (e.g. 'contextPercent', 'cacheReadRatio'). */
+  metric: string;
+  /** The measured value that crossed or compared to the threshold. */
+  observedValue: number;
+  /** The threshold the observed value was compared to, when applicable. */
+  threshold?: number;
+  /** Number of data points (entries or turns) used for this reading. */
+  sampleCount?: number;
+};
+
 export type Recommendation = {
   /** Stable identifier for deduplication and testing. */
   id: string;
@@ -24,6 +40,8 @@ export type Recommendation = {
   /** One-sentence explanation of why this recommendation was raised. */
   explanation: string;
   confidence: Confidence;
+  /** Structured evidence that produced this recommendation. Optional; present on all rule-generated recommendations. */
+  evidence?: readonly RecommendationEvidence[];
 };
 
 export type AdvisoryResult = {

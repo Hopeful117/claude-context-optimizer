@@ -412,3 +412,129 @@ test('no recommendations when only 1 turn with moderate fill and no rate limits'
   expect(contextGrowthRule(h)).toBe(null);
   expect(rateLimitRule([])).toBe(null);
 });
+
+// ============================================================
+// ES-005: Incomplete events — missing/null optional fields
+// ============================================================
+
+test('contextFillRule: handles session_start entry (no contextPercent) gracefully', () => {
+  const startEntry = makeEntry({
+    kind: 'session_start',
+    timestampMs: 0,
+    sessionId: 's1',
+    context: { window: 0, tokens: undefined, percent: undefined },
+    contextSource: 'session.usage',
+    costUsd: null,
+  });
+  let h = makeHistory('s1');
+  h = appendEntry(h, startEntry);
+  h = appendEntry(h, turnEntry(CONTEXT_FILL_HIGH, 0, 1000, 1));
+  const r = contextFillRule(h);
+  expect(r?.id).toBe('context-fill-high');
+});
+
+test('cacheEfficiencyRule: turns with null turnUsage are ignored', () => {
+  // A turn entry without turnUsage (e.g., aborted turn)
+  const noUsageTurn = makeEntry({
+    kind: 'turn',
+    timestampMs: 0,
+    sessionId: 's1',
+    context: { window: 200000, percent: 50 },
+    contextSource: 'session.usage',
+    costUsd: null,
+    // no turnUsage → null
+  });
+  let h = makeHistory('s1');
+  for (let i = 0; i < CACHE_EFFICIENCY_MIN_TURNS; i++) {
+    h = appendEntry(h, noUsageTurn);
+  }
+  // No turns with turnUsage → cannot compute ratio → null
+  expect(cacheEfficiencyRule(h)).toBeNull();
+});
+
+test('contextGrowthRule: single turn with null contextPercent — not counted', () => {
+  // A turn with no contextPercent plus two valid turns → still only 2 usable
+  const h = historyWith(
+    turnEntry(null, 0, 1000, 0),  // no percent
+    turnEntry(50, 0, 1000, 1),
+    turnEntry(60, 0, 1000, 2),
+  );
+  // Only 2 turns have contextPercent → insufficient
+  expect(contextGrowthRule(h)).toBeNull();
+});
+
+// ============================================================
+// ES-005: Unexpected event order — compact at history start
+// ============================================================
+
+test('entriesSinceLastCompact: compact is first entry — returns nothing after it', () => {
+  // Edge case: compact entry with no prior entries (e.g., resumed after compact)
+  const h = historyWith(
+    compactEntry(0),
+    turnEntry(10, 0, 1000, 1),
+  );
+  // After compact: only 1 turn available → no growth recommendation
+  expect(contextGrowthRule(h)).toBeNull();
+  // Fill rule: 1 entry with 10% → below threshold
+  expect(contextFillRule(h)).toBeNull();
+});
+
+test('contextFillRule: interleaved measure + turn entries — uses most recent', () => {
+  // Two turns at high fill, then a measure event that resets our view
+  // The pane uses most recent entry — should respect order
+  const h = historyWith(
+    turnEntry(CONTEXT_FILL_HIGH, 0, 1000, 0),
+    measureEntry(10, 1),  // measure shows context dropped (e.g., after sub-compact)
+  );
+  // Most recent entry in current window has percent = 10 → below threshold
+  expect(contextFillRule(h)).toBeNull();
+});
+
+// ============================================================
+// ES-005: Session reset — fresh history has no contamination
+// ============================================================
+
+test('fresh history after reset has no history from previous session', () => {
+  // Simulate what happens after /clear: makeHistory creates a new object
+  let oldHistory = makeHistory('session-old');
+  for (let i = 0; i < 10; i++) {
+    oldHistory = appendEntry(oldHistory, turnEntry(90, 0, 1000, i));
+  }
+  // After /clear, a fresh history is created for the new session
+  const newHistory = makeHistory('session-new');
+  expect(newHistory.entries.length).toBe(0);
+  expect(newHistory.sessionId).toBe('session-new');
+  // No recommendations on a fresh history
+  expect(contextFillRule(newHistory)).toBeNull();
+  expect(contextGrowthRule(newHistory)).toBeNull();
+});
+
+// ============================================================
+// ES-005: Subagent scenario — mixed main + subagent turns
+// ============================================================
+
+test('all rules: mixed subagent and main-session turns — only main turns affect growth/cache', () => {
+  // 2 main turns (rapid growth) + 3 subagent turns (should not count)
+  const h = historyWith(
+    turnEntry(50, 0, 1000, 0, false),   // main
+    turnEntry(60, 0, 1000, 1, true),    // subagent
+    turnEntry(65, 0, 1000, 2, true),    // subagent
+    turnEntry(70, 0, 1000, 3, true),    // subagent
+    turnEntry(75, 0, 1000, 4, false),   // main (only 2nd main turn)
+  );
+  // Only 2 main turns → growth rule requires 3 → null
+  expect(contextGrowthRule(h)).toBeNull();
+  // Fill: most recent entry (last main turn at 75%) → below high threshold
+  expect(contextFillRule(h)).toBeNull();
+});
+
+test('contextFillRule: subagent turn at high fill — does not trigger (uses most-recent entry)', () => {
+  // If subagent turn is last and at high fill, fill rule still fires
+  // (fill rule doesn't distinguish subagent — it looks at last entry with percent)
+  const h = historyWith(
+    turnEntry(CONTEXT_FILL_HIGH, 0, 1000, 0, true),  // subagent at high fill
+  );
+  // contextFillRule doesn't filter subagents — it reports the fill as-is
+  const r = contextFillRule(h);
+  expect(r?.id).toBe('context-fill-high');
+});

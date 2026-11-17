@@ -1,6 +1,43 @@
-export type MetricsSnapshot = {
+// PluginState contract — must be self-contained (no imports).
+// Types are inlined from src/metrics/types.ts.
+
+export type EventKind = 'session_start' | 'turn' | 'measure' | 'compact';
+export type ContextSource = 'session.usage' | 'session.measure';
+
+export type NormalizedTurnUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  model: string;
+};
+
+export type HistoryEntry = {
+  kind: EventKind;
+  timestampMs: number;
+  sessionId: string;
+  contextSource: ContextSource;
+  contextWindow: number;
+  contextTokens: number | null;
+  contextPercent: number | null;
+  turnUsage: NormalizedTurnUsage | null;
+  costUsd: number | null;
+  isSubagent: boolean;
+  agentId: string | undefined;
+  compactTrigger: string | null;
+};
+
+export type MetricsHistory = {
+  sessionId: string;
+  entries: readonly HistoryEntry[];
+  compactionCount: number;
+  maxEntries: number;
+};
+
+export type PaneSnapshot = {
   turns: number;
   measurements: number;
+  compactionCount: number;
   sessionId: string | null;
   model: string | null;
   context: {
@@ -19,14 +56,18 @@ export type MetricsSnapshot = {
     percentUsed: number;
     resetsAt: string | null;
   }>;
-  cost: number | null;
+  costUsd: number | null;
   lastCompactTrigger: string | null;
 };
 
 declare module 'claude-code' {
   interface PluginState {
     'context-optimizer': {
-      metrics: Shaped<MetricsSnapshot>;
+      history: Shaped<MetricsHistory>;
+      pane: Shaped<PaneSnapshot>;
+      // Migration shim: allows the engine to safely clear v0.2.0 'metrics' state.
+      // Remove once all sessions have been restarted past v0.3.0.
+      metrics: Shaped<null>;
     };
   }
 }

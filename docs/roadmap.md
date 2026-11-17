@@ -26,10 +26,11 @@ Confirmed: Mod loads on Claude Desktop Code tab; all core metrics available; Pan
 
 ## Phase 3 — Compaction Intelligence
 
-- **ADR-004**: User-Controlled Compaction Intelligence — architecture for opt-in guided compaction. Status: Proposed (pending human acceptance). ← _architecture decision_
-- **ES-010**: Guided Compaction Prototype — passive instruction injection on user-initiated `/compact`. Toggle in pane. Hypothesis H1 must be validated first. v0.9.0. ← _current_
+- **ADR-004**: User-Controlled Compaction Intelligence — trigger policy, two-toggle consent model (manual + auto), fail-open invariant. Status: **Accepted** (2026-11-17). ✅
+- **ES-010**: Guided Compaction Prototype — passive instruction injection on user-initiated `/compact`. Toggle in pane. H1 validated 2026-11-17. v0.9.0. ✅
+- **ES-011**: Comparative Evaluation + Auto Trigger — formal Group A/B evaluation protocol, `autoGuideEnabled` toggle, `wasGuided` history marker. v1.0.0. ← _current_
 
-**Phase 3 exit gate:** ADR-004 accepted, H1 validated in live session, comparative evaluation (Group A vs B) completed, Go/No-Go documented.
+**Phase 3 exit gate:** ADR-004 accepted ✅, H1 validated ✅, comparative evaluation (Group A vs B) pending, Go/No-Go for ES-012 pending.
 
 ## Future — Context Orchestrator
 

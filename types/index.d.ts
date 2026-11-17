@@ -58,6 +58,8 @@ export type PaneSnapshot = {
   }>;
   costUsd: number | null;
   lastCompactTrigger: string | null;
+  /** ES-010: whether compaction guidance is active for this session. Default: false. */
+  guideEnabled: boolean;
 };
 
 declare module 'claude-code' {

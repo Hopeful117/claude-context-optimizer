@@ -8,7 +8,7 @@ This file provides authoritative project context for AI coding assistants (Claud
 
 A **Claude Code plugin** (mod) that renders a live context-window dashboard inside the Claude Desktop app. It observes session events (`session.start`, `turn.complete`, `session.measure`, `session.compact`) and displays context fill, token breakdown, cache diagnostics, advisor recommendations, and compaction guidance controls in a persistent side pane.
 
-**Current version:** v1.0.3 (ES-014 — Evaluation Data Collection)
+**Current version:** v1.0.4 (ES-015 — Evaluation Signal Reliability)
 
 ---
 
@@ -88,7 +88,9 @@ DevLog configuration is in `TOOLS.md` (this repository's DevLog project slug: `c
 - **ES-011** code merged (v1.0.0) — Auto trigger extension implemented. Evaluation methodology superseded by ADR-005 → ES-014. ✅
 - **ES-012** merged (v1.0.1) — Persistent Guidance Toggle State (`rememberPrefs`, `prefsAtom`). ✅
 - **ES-013** merged on `main` (v1.0.2) — Guided Compaction Stabilization (ANO-001–ANO-006 fixes). ✅
-- **ES-014** in progress (v1.0.3) — Evaluation Data Collection (`evalAtom`, annotation widget, ADR-005 implementation).
+- **ES-014** merged (v1.0.3) — Evaluation Data Collection (`evalAtom`, annotation widget, ADR-005 implementation). ✅
+- **ES-015** merged (v1.0.4) — Evaluation Signal Reliability (`turnsUntilAnnotation`, `dismissed`, ADR-005 amendment). ✅
+- **ES-016** in progress — Comparative Evaluation Readiness (ADR-005 comparative grid, evaluation protocol, results template).
 
 ---
 

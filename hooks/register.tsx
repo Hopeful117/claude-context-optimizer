@@ -9,6 +9,7 @@ import { evaluate } from '../src/advisor/engine';
 import { recordTiming, getAllStats } from '../src/perf/timing';
 import { contextTrend } from '../src/pane/trend';
 import { evidenceLine } from '../src/pane/format';
+import { computeEvalSummary } from '../src/pane/eval-summary';
 
 const PANE = 'context-optimizer';
 
@@ -445,6 +446,9 @@ export const register: Register = (on) => {
     try {
       const snap = await read($, paneAtom);
       const history = await read($, historyAtom);
+      // ES-017: fail-open read — empty log if atom is unavailable.
+      const evalLog = await read($, evalAtom).catch(() => ({ entries: [], maxEntries: 200 }));
+      const evalSummary = computeEvalSummary(evalLog);
       const ctx = snap.context;
       const api = snap.apiUsage;
       const advisory = evaluate(history, snap.rateLimits);
@@ -661,6 +665,73 @@ export const register: Register = (on) => {
                   void update($, paneAtom, m => ({ ...m, pendingAnnotationId: null })).catch(() => {});
                 }}>—</Button>
               </Box>
+            </Box>
+          )}
+
+          {/* ES-017: Evaluation Data — aggregate evalAtom stats per group */}
+          {evalSummary.totalEntries > 0 && (
+            <Box flexDirection="column">
+              <Text bold>
+                {'Evaluation Data '}
+                <Text dimColor>
+                  ({evalSummary.totalEntries} entr{evalSummary.totalEntries === 1 ? 'y' : 'ies'}
+                  {evalSummary.precomputeExcluded > 0 ? `, ${evalSummary.precomputeExcluded} precompute excl.` : ''})
+                </Text>
+              </Text>
+              {/* Group A */}
+              <Text>
+                {'  '}
+                <Text dimColor>Unguided (A)</Text>
+                {'  total:'}{evalSummary.groupA.total}
+                {'  annotated:'}{evalSummary.groupA.annotated}
+                {'  skipped:'}{evalSummary.groupA.skipped}
+              </Text>
+              {evalSummary.groupA.total > 0 && (
+                <>
+                  <Text dimColor>
+                    {'    response: '}
+                    {evalSummary.groupA.responseRate !== null
+                      ? `${evalSummary.groupA.annotated}/${evalSummary.groupA.total}=${Math.round(evalSummary.groupA.responseRate * 100)}%`
+                      : '—'}
+                    {'   satisfaction: '}
+                    {evalSummary.groupA.satisfactionRate !== null
+                      ? `${evalSummary.groupA.positive}/${evalSummary.groupA.annotated}=${Math.round(evalSummary.groupA.satisfactionRate * 100)}%`
+                      : '—'}
+                  </Text>
+                  <Text dimColor>
+                    {'    pos:'}{evalSummary.groupA.positive}
+                    {'  neg:'}{evalSummary.groupA.negative}
+                    {'  dis:'}{evalSummary.groupA.dismissed}
+                  </Text>
+                </>
+              )}
+              {/* Group B */}
+              <Text>
+                {'  '}
+                <Text dimColor>Guided (B)</Text>
+                {'    total:'}{evalSummary.groupB.total}
+                {'  annotated:'}{evalSummary.groupB.annotated}
+                {'  skipped:'}{evalSummary.groupB.skipped}
+              </Text>
+              {evalSummary.groupB.total > 0 && (
+                <>
+                  <Text dimColor>
+                    {'    response: '}
+                    {evalSummary.groupB.responseRate !== null
+                      ? `${evalSummary.groupB.annotated}/${evalSummary.groupB.total}=${Math.round(evalSummary.groupB.responseRate * 100)}%`
+                      : '—'}
+                    {'   satisfaction: '}
+                    {evalSummary.groupB.satisfactionRate !== null
+                      ? `${evalSummary.groupB.positive}/${evalSummary.groupB.annotated}=${Math.round(evalSummary.groupB.satisfactionRate * 100)}%`
+                      : '—'}
+                  </Text>
+                  <Text dimColor>
+                    {'    pos:'}{evalSummary.groupB.positive}
+                    {'  neg:'}{evalSummary.groupB.negative}
+                    {'  dis:'}{evalSummary.groupB.dismissed}
+                  </Text>
+                </>
+              )}
             </Box>
           )}
 

@@ -34,7 +34,8 @@ Confirmed: Mod loads on Claude Desktop Code tab; all core metrics available; Pan
 - **ADR-005**: Evaluation Data Policy — automated behavioral proxies (`evalAtom`, `turnsUntilAnnotation`, optional annotation) replace manual M1–M4 protocol. Status: **Accepted, amended ES-015** (2026-11-17). ✅
 - **ES-014**: Evaluation Data Collection — `evalAtom`, annotation widget, compact history fields. v1.0.3. ✅
 - **ES-015**: Evaluation Signal Reliability — `turnsToResumption` → `turnsUntilAnnotation` (accurate semantics), `'dismissed'` annotation value, ADR-005 amendment. v1.0.4. ✅
-- **ES-016**: Comparative Evaluation Readiness — ADR-005 comparative decision grid, formal metric definitions (`response_rate`, `satisfaction_rate`, `dismissal_rate`, `missing_rate`), `INSUFFICIENT EVIDENCE` verdict, evaluation protocol, results template. ← _current_
+- **ES-016**: Comparative Evaluation Readiness — ADR-005 comparative decision grid, formal metric definitions (`response_rate`, `satisfaction_rate`, `dismissal_rate`, `missing_rate`), `INSUFFICIENT EVIDENCE` verdict, evaluation protocol, results template. ✅
+- **ES-017**: Evaluation Data Display — in-pane read-only aggregate summary of `evalAtom` (counts per group, response rate, satisfaction rate). v1.0.5. ← _current_
 
 **Phase 3 exit gate:** ADR-004 accepted ✅, H1 validated ✅, code stabilized (ES-013) ✅ — Go/No-Go verdict blocked on evaluation data accumulation (ES-014/ES-015/ES-016).
 

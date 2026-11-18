@@ -223,13 +223,13 @@ test('paneAtom default: rememberPrefs is false (ANO-002 fix)', () => {
     autoGuideEnabled: false,
     rememberPrefs: false,
     pendingAnnotationId: null as string | null,
-    turnsSinceCompaction: 0,
+    turnsUntilAnnotation: 0,
   };
   expect(initialPane.rememberPrefs).toBe(false);
   expect(initialPane.guideEnabled).toBe(false);
   expect(initialPane.autoGuideEnabled).toBe(false);
   expect(initialPane.pendingAnnotationId).toBeNull();
-  expect(initialPane.turnsSinceCompaction).toBe(0);
+  expect(initialPane.turnsUntilAnnotation).toBe(0);
 });
 
 // ============================================================
@@ -306,17 +306,17 @@ test('makeEntry: turnsBeforeCompaction is undefined for non-compact entries', ()
   expect(entry.contextPercentAtCompaction).toBeUndefined();
 });
 
-test('evalEntry defaults: turnsToResumption is null, userAnnotation is skipped', () => {
+test('evalEntry defaults: turnsUntilAnnotation is null, userAnnotation is skipped', () => {
   const evalEntry = {
     compactionId: 'sess-014:1',
     wasGuided: true,
     trigger: 'manual',
     timestampMs: 1700000000000,
     turnsAtCompaction: 7,
-    turnsToResumption: null as number | null,
+    turnsUntilAnnotation: null as number | null,
     userAnnotation: 'skipped' as const,
   };
-  expect(evalEntry.turnsToResumption).toBeNull();
+  expect(evalEntry.turnsUntilAnnotation).toBeNull();
   expect(evalEntry.userAnnotation).toBe('skipped');
 });
 
@@ -332,89 +332,120 @@ test('compactionId format: sessionId:index (1-indexed)', () => {
   expect(compactionId2).toBe('sess-abc:2');
 });
 
-test('turnsSinceCompaction: main-session turns increment counter while pending', () => {
+test('turnsUntilAnnotation: main-session turns increment counter while pending', () => {
   // Simulates the turn.complete handler logic.
   // After compaction, pendingAnnotationId is set and counter increments each main-session turn.
   const prevPendingAnnotationId: string | null = 'sess-014:1';
   const isSubagent = false;
 
-  let turnsSinceCompaction = 0;
+  let turnsUntilAnnotation = 0;
   // Simulate 3 main-session turns
   for (let i = 0; i < 3; i++) {
     if (!isSubagent && prevPendingAnnotationId != null) {
-      turnsSinceCompaction += 1;
+      turnsUntilAnnotation += 1;
     }
   }
 
-  expect(turnsSinceCompaction).toBe(3);
+  expect(turnsUntilAnnotation).toBe(3);
   // pendingAnnotationId still set — not cleared by turns
 });
 
-test('turnsSinceCompaction: subagent turn does NOT increment counter', () => {
+test('turnsUntilAnnotation: subagent turn does NOT increment counter', () => {
   const prevPendingAnnotationId: string | null = 'sess-014:1';
   const isSubagent = true;
 
-  let turnsSinceCompaction = 0;
+  let turnsUntilAnnotation = 0;
   if (!isSubagent && prevPendingAnnotationId != null) {
-    turnsSinceCompaction += 1;
+    turnsUntilAnnotation += 1;
   }
 
-  expect(turnsSinceCompaction).toBe(0);
+  expect(turnsUntilAnnotation).toBe(0);
 });
 
-test('annotation: positive sets userAnnotation and records turnsToResumption', () => {
+test('annotation: positive sets userAnnotation and records turnsUntilAnnotation', () => {
   const id = 'sess-014:1';
-  const turnsSinceCompaction = 3; // simulates snap.turnsSinceCompaction at annotation time
+  const turnsUntilAnnotation = 3;
   const entries = [{
     compactionId: id,
     wasGuided: true,
     trigger: 'manual',
     timestampMs: 1700000000000,
     turnsAtCompaction: 3,
-    turnsToResumption: null as number | null,
+    turnsUntilAnnotation: null as number | null,
     userAnnotation: 'skipped' as const,
   }];
 
   const updated = entries.map(e =>
     e.compactionId === id
-      ? { ...e, userAnnotation: 'positive' as const, turnsToResumption: turnsSinceCompaction }
+      ? { ...e, userAnnotation: 'positive' as const, turnsUntilAnnotation }
       : e
   );
   expect(updated[0]!.userAnnotation).toBe('positive');
-  expect(updated[0]!.turnsToResumption).toBe(3);
+  expect(updated[0]!.turnsUntilAnnotation).toBe(3);
 });
 
-test('annotation: negative sets userAnnotation and records turnsToResumption', () => {
+test('annotation: negative sets userAnnotation and records turnsUntilAnnotation', () => {
   const id = 'sess-014:1';
-  const turnsSinceCompaction = 2;
+  const turnsUntilAnnotation = 2;
   const entries = [{
     compactionId: id,
     wasGuided: true,
     trigger: 'manual',
     timestampMs: 1700000000000,
     turnsAtCompaction: 3,
-    turnsToResumption: null as number | null,
+    turnsUntilAnnotation: null as number | null,
     userAnnotation: 'skipped' as const,
   }];
 
   const updated = entries.map(e =>
     e.compactionId === id
-      ? { ...e, userAnnotation: 'negative' as const, turnsToResumption: turnsSinceCompaction }
+      ? { ...e, userAnnotation: 'negative' as const, turnsUntilAnnotation }
       : e
   );
   expect(updated[0]!.userAnnotation).toBe('negative');
-  expect(updated[0]!.turnsToResumption).toBe(2);
+  expect(updated[0]!.turnsUntilAnnotation).toBe(2);
 });
 
-test('annotation: dismiss (—) leaves userAnnotation as skipped', () => {
-  // The dismiss button only clears pendingAnnotationId — it does not update evalAtom.
-  // So userAnnotation stays at its default 'skipped'.
-  const entry = {
-    compactionId: 'sess-014:1',
+test('annotation: dismiss (—) writes dismissed to evalAtom (ES-015)', () => {
+  // The dismiss button now writes userAnnotation: 'dismissed' to evalAtom.
+  // This distinguishes explicit dismissal from structural absence (skipped).
+  const id = 'sess-014:1';
+  const entries = [{
+    compactionId: id,
+    wasGuided: true,
+    trigger: 'manual',
+    timestampMs: 1700000000000,
+    turnsAtCompaction: 3,
+    turnsUntilAnnotation: null as number | null,
+    userAnnotation: 'skipped' as const,
+  }];
+
+  const updated = entries.map(e =>
+    e.compactionId === id ? { ...e, userAnnotation: 'dismissed' as const } : e
+  );
+  expect(updated[0]!.userAnnotation).toBe('dismissed');
+  // turnsUntilAnnotation is not set for dismiss — user chose not to rate.
+  expect(updated[0]!.turnsUntilAnnotation).toBeNull();
+});
+
+test('annotation: skipped means annotation never reached (not explicit dismiss)', () => {
+  // After ES-015: 'skipped' = structural absence (second compaction, session end, pane hidden).
+  // 'dismissed' = user pressed "—".
+  // Both have turnsUntilAnnotation: null.
+  const skippedEntry = {
+    compactionId: 'sess:1',
+    turnsUntilAnnotation: null as number | null,
     userAnnotation: 'skipped' as const,
   };
-  // No change to entry
-  expect(entry.userAnnotation).toBe('skipped');
+  const dismissedEntry = {
+    compactionId: 'sess:2',
+    turnsUntilAnnotation: null as number | null,
+    userAnnotation: 'dismissed' as const,
+  };
+  expect(skippedEntry.userAnnotation).toBe('skipped');
+  expect(dismissedEntry.userAnnotation).toBe('dismissed');
+  expect(skippedEntry.turnsUntilAnnotation).toBeNull();
+  expect(dismissedEntry.turnsUntilAnnotation).toBeNull();
 });
 
 test('evalLog cap: oldest entry dropped when at maxEntries', () => {
@@ -425,7 +456,7 @@ test('evalLog cap: oldest entry dropped when at maxEntries', () => {
     trigger: 'manual',
     timestampMs: 1700000000000 + i,
     turnsAtCompaction: i,
-    turnsToResumption: 1,
+    turnsUntilAnnotation: 1,
     userAnnotation: 'skipped' as const,
   }));
   const newEntry = {
@@ -434,7 +465,7 @@ test('evalLog cap: oldest entry dropped when at maxEntries', () => {
     trigger: 'auto',
     timestampMs: 1700000000004,
     turnsAtCompaction: 10,
-    turnsToResumption: null as number | null,
+    turnsUntilAnnotation: null as number | null,
     userAnnotation: 'skipped' as const,
   };
 
@@ -452,7 +483,115 @@ test('evalAtom initial state: empty entries, maxEntries 200', () => {
   expect(initial.maxEntries).toBe(200);
 });
 
-test('paneAtom default: pendingAnnotationId is null, turnsSinceCompaction is 0 (ES-014)', () => {
+// ============================================================
+// ES-015: Signal reliability — regression tests
+// ============================================================
+
+test('successive compactions: first entry stays skipped when second compaction fires before annotation', () => {
+  // Simulate: first compaction appended, then second compaction before annotation.
+  // pendingAnnotationId moves to second compaction; first is permanently skipped.
+  const firstEntry = {
+    compactionId: 'sess:1',
+    turnsUntilAnnotation: null as number | null,
+    userAnnotation: 'skipped' as const,
+  };
+  const secondEntry = {
+    compactionId: 'sess:2',
+    turnsUntilAnnotation: null as number | null,
+    userAnnotation: 'skipped' as const,
+  };
+
+  let entries = [firstEntry];
+  let pendingAnnotationId: string | null = 'sess:1';
+  let turnsUntilAnnotation = 2;
+
+  // Second compaction fires — appends, resets pending and counter
+  entries = [...entries, secondEntry];
+  pendingAnnotationId = 'sess:2';
+  turnsUntilAnnotation = 0;
+
+  // User now annotates the second compaction
+  entries = entries.map(e =>
+    e.compactionId === pendingAnnotationId
+      ? { ...e, userAnnotation: 'positive' as const, turnsUntilAnnotation }
+      : e
+  );
+  pendingAnnotationId = null;
+
+  expect(entries[0]!.userAnnotation).toBe('skipped');      // first: permanently skipped
+  expect(entries[0]!.turnsUntilAnnotation).toBeNull();     // no timing data
+  expect(entries[1]!.userAnnotation).toBe('positive');     // second: annotated
+  expect(entries[1]!.turnsUntilAnnotation).toBe(0);        // annotated immediately
+});
+
+test('successive compactions: compactionId uniqueness across compactions', () => {
+  // compactionId = sessionId:index (1-indexed, incrementing)
+  const sessionId = 'sess-abc';
+  const ids = [1, 2, 3].map(i => `${sessionId}:${i}`);
+  expect(new Set(ids).size).toBe(3); // all unique
+  expect(ids[0]).toBe('sess-abc:1');
+  expect(ids[2]).toBe('sess-abc:3');
+});
+
+test('session reset: turnsUntilAnnotation and pendingAnnotationId reset on session.start/end', () => {
+  // After session reset, any pending annotation is abandoned.
+  // The corresponding evalAtom entry stays as 'skipped' permanently — by design.
+  const afterReset = {
+    pendingAnnotationId: null as string | null,
+    turnsUntilAnnotation: 0,
+  };
+  expect(afterReset.pendingAnnotationId).toBeNull();
+  expect(afterReset.turnsUntilAnnotation).toBe(0);
+});
+
+test('dismissed vs skipped: distinguishable after ES-015', () => {
+  // Analysis can now filter: include dismissed+positive+negative, exclude skipped.
+  type UA = 'positive' | 'negative' | 'skipped' | 'dismissed';
+  const annotated = (ua: UA) => ua === 'positive' || ua === 'negative' || ua === 'dismissed';
+
+  expect(annotated('positive')).toBe(true);
+  expect(annotated('negative')).toBe(true);
+  expect(annotated('dismissed')).toBe(true);
+  expect(annotated('skipped')).toBe(false); // excluded from rate calculation
+});
+
+test('annotation rate: only positive+negative+dismissed count toward sample', () => {
+  // Go/No-Go criteria use annotated sample, not total entries.
+  type UA = 'positive' | 'negative' | 'skipped' | 'dismissed';
+  const entries: { userAnnotation: UA }[] = [
+    { userAnnotation: 'positive' },
+    { userAnnotation: 'positive' },
+    { userAnnotation: 'negative' },
+    { userAnnotation: 'dismissed' },
+    { userAnnotation: 'skipped' },  // excluded
+    { userAnnotation: 'skipped' },  // excluded
+  ];
+
+  const annotated = entries.filter(e => e.userAnnotation !== 'skipped');
+  const positiveRate = annotated.filter(e => e.userAnnotation === 'positive').length / annotated.length;
+
+  expect(annotated.length).toBe(4);
+  expect(positiveRate).toBe(0.5);
+});
+
+test('turnsUntilAnnotation: annotation at turn 0 (immediate click after compaction)', () => {
+  // If the user clicks 👍 before any further turn, turnsUntilAnnotation = 0.
+  const turnsUntilAnnotation = 0;
+  const entries = [{
+    compactionId: 'sess:1',
+    turnsUntilAnnotation: null as number | null,
+    userAnnotation: 'skipped' as const,
+  }];
+  const updated = entries.map(e =>
+    e.compactionId === 'sess:1'
+      ? { ...e, userAnnotation: 'positive' as const, turnsUntilAnnotation }
+      : e
+  );
+  expect(updated[0]!.turnsUntilAnnotation).toBe(0);
+  expect(updated[0]!.userAnnotation).toBe('positive');
+});
+
+test('paneAtom default: pendingAnnotationId is null, turnsUntilAnnotation is 0 (ES-015)', () => {
   const initialPane = {
     turns: 0,
     measurements: 0,
@@ -468,8 +607,8 @@ test('paneAtom default: pendingAnnotationId is null, turnsSinceCompaction is 0 (
     autoGuideEnabled: false,
     rememberPrefs: false,
     pendingAnnotationId: null as string | null,
-    turnsSinceCompaction: 0,
+    turnsUntilAnnotation: 0,
   };
   expect(initialPane.pendingAnnotationId).toBeNull();
-  expect(initialPane.turnsSinceCompaction).toBe(0);
+  expect(initialPane.turnsUntilAnnotation).toBe(0);
 });

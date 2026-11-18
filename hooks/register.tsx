@@ -26,7 +26,7 @@ const _legacyMetricsCompat = atom(
 void _legacyMetricsCompat; // silence unused-variable warnings
 
 // Current display state — drives the pane, updated on every event.
-// Shape bumped to 'pane-4' to clear old state when pendingAnnotationId / turnsSinceCompaction are added (ES-014).
+// Shape bumped to 'pane-5': turnsSinceCompaction renamed turnsUntilAnnotation (ES-015).
 const paneAtom = atom(
   { plugin: 'context-optimizer', key: 'pane' } as const,
   {
@@ -44,9 +44,9 @@ const paneAtom = atom(
     autoGuideEnabled: false,
     rememberPrefs: false,
     pendingAnnotationId: null,
-    turnsSinceCompaction: 0,
+    turnsUntilAnnotation: 0,
   } satisfies PaneSnapshot,
-  { shape: 'pane-4' },
+  { shape: 'pane-5' },
 );
 
 // Persistent preferences — never reset on session start or end.
@@ -65,13 +65,14 @@ const historyAtom = atom(
   { shape: 'history-1' },
 );
 
-// Bounded evaluation log — one entry per compaction event (ES-014).
-// turnsToResumption filled lazily on the first main-session turn.complete post-compaction.
-// userAnnotation set by in-pane user action; default is 'skipped'.
+// Bounded evaluation log — one entry per compaction event (ES-014/ES-015).
+// turnsUntilAnnotation: turns from compaction to annotation click (null if no annotation).
+// userAnnotation: positive/negative = rated; dismissed = explicit "—"; skipped = never reached.
+// Shape eval-2: turnsToResumption renamed turnsUntilAnnotation, dismissed added (ES-015).
 const evalAtom = atom(
   { plugin: 'context-optimizer', key: 'eval' } as const,
   { entries: [], maxEntries: 200 } satisfies EvalLog,
-  { shape: 'eval-1' },
+  { shape: 'eval-2' },
 );
 
 // --- Helpers ---
@@ -143,7 +144,7 @@ export const register: Register = (on) => {
         autoGuideEnabled: false,
         rememberPrefs: prefs.rememberPrefs,
         pendingAnnotationId: null,
-        turnsSinceCompaction: 0,
+        turnsUntilAnnotation: 0,
       }));
 
       const freshHistory = makeHistory(sid, MAX_HISTORY);
@@ -272,10 +273,10 @@ export const register: Register = (on) => {
       });
       await update($, historyAtom, h => appendEntry(h, entry));
 
-      // ES-014: count main-session turns since the last compaction (annotation still pending).
-      // turnsToResumption is set when the user annotates or dismisses — not here.
+      // ES-015: count main-session turns since the last compaction (annotation still pending).
+      // turnsUntilAnnotation is written to evalAtom when the user annotates or dismisses.
       if (!isSubagent && prevSnap.pendingAnnotationId != null) {
-        await update($, paneAtom, m => ({ ...m, turnsSinceCompaction: m.turnsSinceCompaction + 1 }));
+        await update($, paneAtom, m => ({ ...m, turnsUntilAnnotation: m.turnsUntilAnnotation + 1 }));
       }
 
       $.ui.status(`ctx:${pct(contextSnapshot.percent)}`);
@@ -316,7 +317,7 @@ export const register: Register = (on) => {
         autoGuideEnabled: false,
         rememberPrefs: prefs.rememberPrefs,
         pendingAnnotationId: null,
-        turnsSinceCompaction: 0,
+        turnsUntilAnnotation: 0,
       }));
 
       const freshHistory = makeHistory(newSid, MAX_HISTORY);
@@ -416,7 +417,7 @@ export const register: Register = (on) => {
         trigger: event.trigger,
         timestampMs: now,
         turnsAtCompaction: snap.turns,
-        turnsToResumption: null,
+        turnsUntilAnnotation: null,
         userAnnotation: 'skipped',
       };
       await update($, evalAtom, log => {
@@ -424,7 +425,7 @@ export const register: Register = (on) => {
         const entries = all.length > log.maxEntries ? all.slice(all.length - log.maxEntries) : all;
         return { ...log, entries };
       });
-      await update($, paneAtom, m => ({ ...m, pendingAnnotationId: compactionId, turnsSinceCompaction: 0 }));
+      await update($, paneAtom, m => ({ ...m, pendingAnnotationId: compactionId, turnsUntilAnnotation: 0 }));
 
       $.ui.status(`ctx:${wasGuided ? 'guided-' : ''}compacted(${event.trigger})`);
     } catch {
@@ -627,11 +628,11 @@ export const register: Register = (on) => {
                 <Text dimColor>  Summary useful?  </Text>
                 <Button onPress={() => {
                   const id = snap.pendingAnnotationId!;
-                  const turns = snap.turnsSinceCompaction;
+                  const turns = snap.turnsUntilAnnotation;
                   void update($, evalAtom, log => ({
                     ...log,
                     entries: log.entries.map(e =>
-                      e.compactionId === id ? { ...e, userAnnotation: 'positive' as const, turnsToResumption: turns } : e
+                      e.compactionId === id ? { ...e, userAnnotation: 'positive' as const, turnsUntilAnnotation: turns } : e
                     ),
                   })).catch(() => {});
                   void update($, paneAtom, m => ({ ...m, pendingAnnotationId: null })).catch(() => {});
@@ -639,17 +640,24 @@ export const register: Register = (on) => {
                 <Text>  </Text>
                 <Button onPress={() => {
                   const id = snap.pendingAnnotationId!;
-                  const turns = snap.turnsSinceCompaction;
+                  const turns = snap.turnsUntilAnnotation;
                   void update($, evalAtom, log => ({
                     ...log,
                     entries: log.entries.map(e =>
-                      e.compactionId === id ? { ...e, userAnnotation: 'negative' as const, turnsToResumption: turns } : e
+                      e.compactionId === id ? { ...e, userAnnotation: 'negative' as const, turnsUntilAnnotation: turns } : e
                     ),
                   })).catch(() => {});
                   void update($, paneAtom, m => ({ ...m, pendingAnnotationId: null })).catch(() => {});
                 }}>👎</Button>
                 <Text>  </Text>
                 <Button onPress={() => {
+                  const id = snap.pendingAnnotationId!;
+                  void update($, evalAtom, log => ({
+                    ...log,
+                    entries: log.entries.map(e =>
+                      e.compactionId === id ? { ...e, userAnnotation: 'dismissed' as const } : e
+                    ),
+                  })).catch(() => {});
                   void update($, paneAtom, m => ({ ...m, pendingAnnotationId: null })).catch(() => {});
                 }}>—</Button>
               </Box>

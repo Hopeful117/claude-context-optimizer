@@ -90,7 +90,7 @@ DevLog configuration is in `TOOLS.md` (this repository's DevLog project slug: `c
 - **ES-013** merged on `main` (v1.0.2) — Guided Compaction Stabilization (ANO-001–ANO-006 fixes). ✅
 - **ES-014** merged (v1.0.3) — Evaluation Data Collection (`evalAtom`, annotation widget, ADR-005 implementation). ✅
 - **ES-015** merged (v1.0.4) — Evaluation Signal Reliability (`turnsUntilAnnotation`, `dismissed`, ADR-005 amendment). ✅
-- **ES-016** in progress — Comparative Evaluation Readiness (ADR-005 comparative grid, evaluation protocol). PR #24.
+- **ES-016** merged (v1.0.4) — Comparative Evaluation Readiness (ADR-005 comparative decision grid, formal metric definitions, evaluation protocol, results template). ✅
 - **ES-017** in progress (v1.0.5) — Evaluation Data Display (in-pane evalAtom aggregate stats).
 
 ---

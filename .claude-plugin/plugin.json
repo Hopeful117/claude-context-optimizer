@@ -1,6 +1,6 @@
 {
   "name": "context-optimizer",
-  "version": "1.0.3",
-  "description": "Evaluation data collection — v1.0.3 (ES-014)",
+  "version": "1.0.5",
+  "description": "Evaluation data display — v1.0.5 (ES-017)",
   "types": "./types/index.d.ts"
 }
